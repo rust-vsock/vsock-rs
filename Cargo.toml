@@ -1,0 +1,7 @@
+[package]
+name = "vsock"
+version = "0.1.0"
+authors = ["fsyncd"]
+edition = "2018"
+
+[dependencies]
