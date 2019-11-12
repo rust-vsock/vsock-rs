@@ -1,0 +1,13 @@
+[package]
+name = "echo_server"
+version = "0.1.0"
+authors = ["fsyncd"]
+description = "Simple echo server for Virtio socket testing"
+license = "Apache-2.0"
+edition = "2018"
+
+[dependencies]
+clap = "2.33.0"
+libc = "0.2.65"
+nix = "0.15.0"
+vsock = { path = "../" }

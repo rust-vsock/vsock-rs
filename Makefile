@@ -34,8 +34,8 @@ clean:
 vsock: $(SRCS)
 	cargo build --lib
 
-echo_server: vsock src/echo_server.rs
-	cargo build --bin echo_server
+echo_server: vsock echo_server/src/main.rs
+	cargo build --manifest-path=echo_server/Cargo.toml
 
 # Set up required host kernel modules
 kmod:
@@ -54,8 +54,8 @@ initrd.cpio: echo_server
 	-rm -f target/$(TOOLCHAIN)/debug/initrd.cpio
 	mkdir -p /tmp/$(ID)
 	cp test_fixture/busybox.cpio /tmp/$(ID)/initrd.cpio
-	cp test_fixture/init-sync /tmp/$(ID)/init
-	cp target/$(TOOLCHAIN)/debug/echo_server /tmp/$(ID)/
+	cp test_fixture/init /tmp/$(ID)/init
+	cp echo_server/target/$(TOOLCHAIN)/debug/echo_server /tmp/$(ID)/
 	(cd '/tmp/$(ID)' && find . | grep -v 'initrd.cpio' | cpio -H newc -o --append -F initrd.cpio)
 	mv /tmp/$(ID)/initrd.cpio target/$(TOOLCHAIN)/debug/
 	rm -Rf /tmp/$(ID)

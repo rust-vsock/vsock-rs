@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-use clap::{crate_authors, crate_version, App, AppSettings, Arg, SubCommand};
+use clap::{crate_authors, crate_version, App, Arg};
 use nix::sys::socket::{SockAddr, VsockAddr};
 use std::io::Read;
 use std::io::Write;
@@ -24,13 +24,37 @@ use vsock::VsockListener;
 
 const BLOCK_SIZE: usize = 16384;
 
-/// Synchronous blocking vsock echo server implementation.
-fn sync_server(listen_port: u32) {
+/// A simple vsock echo server.
+/// Bind and listen for incoming connections, and for each connection, read any received data
+/// and echo the reply back. Implements two different vsock implementations, synchronous
+/// blocking, and event driven.
+fn main() {
+    let matches = App::new("echo_server")
+        .version(crate_version!())
+        .author(crate_authors!())
+        .about("Simple echo server for Virtio socket testing")
+        .arg(
+            Arg::with_name("listen")
+                .long("listen")
+                .short("l")
+                .help("Port to listen for socket connections")
+                .required(true)
+                .takes_value(true),
+        )
+        .get_matches();
+
+    let listen_port = matches
+        .value_of("listen")
+        .expect("port is required")
+        .parse::<u32>()
+        .expect("port must be a valid integer");
+
     let listener = VsockListener::bind(&SockAddr::Vsock(VsockAddr::new(
         libc::VMADDR_CID_ANY,
         listen_port,
     )))
     .expect("bind and listen failed");
+
     println!("Server listening for connections on port {}", listen_port);
     for stream in listener.incoming() {
         match stream {
@@ -68,43 +92,5 @@ fn sync_server(listen_port: u32) {
                 println!("Error: {}", e);
             }
         }
-    }
-}
-
-/// A simple vsock echo server.
-/// Bind and listen for incoming connections, and for each connection, read any received data
-/// and echo the reply back. Implements two different vsock implementations, synchronous
-/// blocking, and event driven.
-fn main() {
-    let matches = App::new("echo_server")
-        .version(crate_version!())
-        .author(crate_authors!())
-        .about("Virtio sockets test server")
-        .setting(AppSettings::ArgRequiredElseHelp)
-        .subcommand(
-            SubCommand::with_name("sync")
-                .version(crate_version!())
-                .author(crate_authors!())
-                .about("Synchronous echo server implementation")
-                .arg(
-                    Arg::with_name("listen")
-                        .long("listen")
-                        .short("l")
-                        .help("Port to listen for socket connections")
-                        .required(true)
-                        .takes_value(true),
-                ),
-        )
-        .get_matches();
-
-    match matches.subcommand() {
-        ("sync", Some(args)) => {
-            let listen_port = args
-                .value_of("listen")
-                .map(|port| port.parse::<u32>().expect("unable to parse port"))
-                .expect("port missing");
-            sync_server(listen_port);
-        }
-        _ => panic!("no valid subcommand provided"),
     }
 }

@@ -1,21 +1,16 @@
 [package]
 name = "vsock"
-version = "0.1.3"
+version = "0.1.4"
 authors = ["fsyncd"]
-description = "Virtio socket support for Rust."
+description = "Virtio socket support for Rust"
 repository = "https://github.com/fsyncd/vsock-rs"
 license = "Apache-2.0"
 edition = "2018"
 exclude = ["test_fixture"]
 
-[[bin]]
-name = "echo_server"
-path = "src/echo_server.rs"
-
 [dependencies]
 libc = "0.2.65"
 nix = "0.15.0"
-clap = "2.33.0"
 
 [dev-dependencies]
 rand = "0.7.2"

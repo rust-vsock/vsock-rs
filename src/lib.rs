@@ -55,7 +55,7 @@ impl VsockListener {
         } else {
             return Err(Error::new(
                 ErrorKind::Other,
-                "require a virtio socket address",
+                "requires a virtio socket address",
             ));
         };
 
@@ -212,7 +212,7 @@ impl VsockStream {
         } else {
             return Err(Error::new(
                 ErrorKind::Other,
-                "require a virtio socket address",
+                "requires a virtio socket address",
             ));
         };
 
