@@ -61,7 +61,7 @@ impl VsockListener {
 
         let socket = unsafe { socket(AF_VSOCK, SOCK_STREAM, 0) };
         if socket < 0 {
-            return Err(Error::new(ErrorKind::Other, "socket() failed"));
+            return Err(Error::last_os_error());
         }
 
         let res = unsafe {
@@ -72,13 +72,13 @@ impl VsockListener {
             )
         };
         if res < 0 {
-            return Err(Error::new(ErrorKind::Other, "bind() failed"));
+            return Err(Error::last_os_error());
         }
 
         // rust stdlib uses a 128 connection backlog
         let res = unsafe { listen(socket, 128) };
         if res < 0 {
-            return Err(Error::new(ErrorKind::Other, "listen() failed"));
+            return Err(Error::last_os_error());
         }
 
         Ok(Self { socket })
@@ -102,7 +102,7 @@ impl VsockListener {
             )
         } < 0
         {
-            Err(Error::new(ErrorKind::Other, "getsockname() failed"))
+            Err(Error::last_os_error())
         } else {
             Ok(SockAddr::Vsock(VsockAddr(vsock_addr)))
         }
@@ -131,7 +131,7 @@ impl VsockListener {
             )
         };
         if socket < 0 {
-            Err(Error::new(ErrorKind::Other, "accept() failed"))
+            Err(Error::last_os_error())
         } else {
             Ok((
                 unsafe { VsockStream::from_raw_fd(socket as RawFd) },
@@ -159,7 +159,7 @@ impl VsockListener {
             )
         } < 0
         {
-            Err(Error::new(ErrorKind::Other, "getsockopt() failed"))
+            Err(Error::last_os_error())
         } else {
             Ok(if error == 0 {
                 None
@@ -173,7 +173,7 @@ impl VsockListener {
     pub fn set_nonblocking(&self, nonblocking: bool) -> Result<()> {
         let mut nonblocking: i32 = if nonblocking { 1 } else { 0 };
         if unsafe { ioctl(self.socket, FIONBIO, &mut nonblocking) } < 0 {
-            Err(Error::new(ErrorKind::Other, "ioctl() failed"))
+            Err(Error::last_os_error())
         } else {
             Ok(())
         }
@@ -218,7 +218,7 @@ impl VsockStream {
 
         let sock = unsafe { socket(AF_VSOCK, SOCK_STREAM, 0) };
         if sock < 0 {
-            return Err(Error::new(ErrorKind::Other, "socket() failed"));
+            return Err(Error::last_os_error());
         }
         if unsafe {
             connect(
@@ -228,7 +228,7 @@ impl VsockStream {
             )
         } < 0
         {
-            Err(Error::new(ErrorKind::Other, "connect() failed"))
+            Err(Error::last_os_error())
         } else {
             Ok(unsafe { VsockStream::from_raw_fd(sock) })
         }
@@ -252,7 +252,7 @@ impl VsockStream {
             )
         } < 0
         {
-            Err(Error::new(ErrorKind::Other, "getpeername() failed"))
+            Err(Error::last_os_error())
         } else {
             Ok(SockAddr::Vsock(VsockAddr(vsock_addr)))
         }
@@ -276,7 +276,7 @@ impl VsockStream {
             )
         } < 0
         {
-            Err(Error::new(ErrorKind::Other, "getsockname() failed"))
+            Err(Error::last_os_error())
         } else {
             Ok(SockAddr::Vsock(VsockAddr(vsock_addr)))
         }
@@ -290,7 +290,7 @@ impl VsockStream {
             Shutdown::Both => SHUT_RDWR,
         };
         if unsafe { shutdown(self.socket, how) } < 0 {
-            Err(Error::new(ErrorKind::Other, "shutdown() failed"))
+            Err(Error::last_os_error())
         } else {
             Ok(())
         }
@@ -314,7 +314,7 @@ impl VsockStream {
             )
         } < 0
         {
-            Err(Error::new(ErrorKind::Other, "setsockopt() failed"))
+            Err(Error::last_os_error())
         } else {
             Ok(())
         }
@@ -333,7 +333,7 @@ impl VsockStream {
             )
         } < 0
         {
-            Err(Error::new(ErrorKind::Other, "setsockopt() failed"))
+            Err(Error::last_os_error())
         } else {
             Ok(())
         }
@@ -353,7 +353,7 @@ impl VsockStream {
             )
         } < 0
         {
-            Err(Error::new(ErrorKind::Other, "getsockopt() failed"))
+            Err(Error::last_os_error())
         } else {
             Ok(if error == 0 {
                 None
@@ -367,7 +367,7 @@ impl VsockStream {
     pub fn set_nonblocking(&self, nonblocking: bool) -> Result<()> {
         let mut nonblocking: i32 = if nonblocking { 1 } else { 0 };
         if unsafe { ioctl(self.socket, FIONBIO, &mut nonblocking) } < 0 {
-            Err(Error::new(ErrorKind::Other, "ioctl() failed"))
+            Err(Error::last_os_error())
         } else {
             Ok(())
         }
@@ -425,7 +425,7 @@ impl Read for &VsockStream {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
         let ret = unsafe { recv(self.socket, buf.as_mut_ptr() as *mut c_void, buf.len(), 0) };
         if ret < 0 {
-            Err(Error::new(ErrorKind::Other, "recv() failed"))
+            Err(Error::last_os_error())
         } else {
             Ok(ret as usize)
         }
@@ -443,7 +443,7 @@ impl Write for &VsockStream {
             )
         };
         if ret < 0 {
-            Err(Error::new(ErrorKind::Other, "send() failed"))
+            Err(Error::last_os_error())
         } else {
             Ok(ret as usize)
         }
