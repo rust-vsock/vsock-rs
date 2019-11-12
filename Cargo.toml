@@ -1,6 +1,6 @@
 [package]
 name = "vsock"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["fsyncd"]
 description = "Virtio socket support for Rust."
 repository = "https://github.com/fsyncd/vsock-rs"

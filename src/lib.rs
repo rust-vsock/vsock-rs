@@ -438,6 +438,39 @@ impl Write for VsockStream {
     }
 }
 
+impl Read for &VsockStream {
+    fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
+        let ret = unsafe { recv(self.socket, buf.as_mut_ptr() as *mut c_void, buf.len(), 0) };
+        if ret < 0 {
+            Err(Error::new(ErrorKind::Other, "recv() failed"))
+        } else {
+            Ok(ret as usize)
+        }
+    }
+}
+
+impl Write for &VsockStream {
+    fn write(&mut self, buf: &[u8]) -> Result<usize> {
+        let ret = unsafe {
+            send(
+                self.socket,
+                buf.as_ptr() as *const c_void,
+                buf.len(),
+                MSG_NOSIGNAL,
+            )
+        };
+        if ret < 0 {
+            Err(Error::new(ErrorKind::Other, "send() failed"))
+        } else {
+            Ok(ret as usize)
+        }
+    }
+
+    fn flush(&mut self) -> Result<()> {
+        Ok(())
+    }
+}
+
 impl AsRawFd for VsockStream {
     fn as_raw_fd(&self) -> RawFd {
         self.socket
