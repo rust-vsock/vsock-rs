@@ -198,6 +198,12 @@ impl IntoRawFd for VsockListener {
     }
 }
 
+impl Drop for VsockListener {
+    fn drop(&mut self) {
+        unsafe { close(self.socket) };
+    }
+}
+
 /// A virtio stream between a local and a remote socket.
 #[derive(Debug, Clone)]
 pub struct VsockStream {
@@ -469,5 +475,11 @@ impl FromRawFd for VsockStream {
 impl IntoRawFd for VsockStream {
     fn into_raw_fd(self) -> RawFd {
         self.socket
+    }
+}
+
+impl Drop for VsockStream {
+    fn drop(&mut self) {
+        unsafe { close(self.socket) };
     }
 }
