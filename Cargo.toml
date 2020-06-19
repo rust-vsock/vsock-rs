@@ -1,6 +1,6 @@
 [package]
 name = "vsock"
-version = "0.1.5"
+version = "0.2.0"
 authors = ["fsyncd"]
 description = "Virtio socket support for Rust"
 repository = "https://github.com/fsyncd/vsock-rs"
@@ -10,7 +10,7 @@ exclude = ["test_fixture"]
 
 [dependencies]
 libc = "0.2.65"
-nix = "0.15.0"
+nix = "0.17.0"
 
 [dev-dependencies]
 rand = "0.7.2"
