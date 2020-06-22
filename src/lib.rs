@@ -27,6 +27,10 @@ use std::ffi::c_void;
 use std::net::Shutdown;
 use std::time::Duration;
 
+fn new_socket() -> libc::c_int {
+    unsafe { socket(AF_VSOCK, SOCK_STREAM | SOCK_CLOEXEC, 0) }
+}
+
 /// An iterator that infinitely accepts connections on a VsockListener.
 #[derive(Debug)]
 pub struct Incoming<'a> {
@@ -59,7 +63,7 @@ impl VsockListener {
             ));
         };
 
-        let socket = unsafe { socket(AF_VSOCK, SOCK_STREAM, 0) };
+        let socket = new_socket();
         if socket < 0 {
             return Err(Error::last_os_error());
         }
@@ -222,7 +226,7 @@ impl VsockStream {
             ));
         };
 
-        let sock = unsafe { socket(AF_VSOCK, SOCK_STREAM, 0) };
+        let sock = new_socket();
         if sock < 0 {
             return Err(Error::last_os_error());
         }
