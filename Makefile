@@ -47,7 +47,7 @@ kmod:
 # Start a virtio socket enabled vm
 vm: initrd.cpio
 	sudo qemu-system-x86_64 -kernel test_fixture/bzImage -initrd target/$(TOOLCHAIN)/debug/initrd.cpio \
-		-enable-kvm -m 256 -device vhost-vsock-pci,id=vhost-vsock-pci0,guest-cid=3 -nographic -append "console=ttyS0"
+		-enable-kvm -m 256 -device vhost-vsock-pci,id=vhost-vsock-pci0,guest-cid=3,disable-legacy=on -nographic -append "console=ttyS0"
 
 # Create a simple operating system image for the vm
 initrd.cpio: echo_server
