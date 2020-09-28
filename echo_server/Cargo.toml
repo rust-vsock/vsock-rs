@@ -7,7 +7,7 @@ license = "Apache-2.0"
 edition = "2018"
 
 [dependencies]
-clap = "2.33.0"
-libc = "0.2.65"
-nix = "0.17.0"
+clap = "2.33.3"
+libc = "0.2.79"
+nix = "0.19.0"
 vsock = { path = "../" }
