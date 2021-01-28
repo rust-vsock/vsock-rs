@@ -18,7 +18,7 @@
 //! Virtio socket support for Rust.
 
 use std::io::{Error, ErrorKind, Read, Result, Write};
-use std::mem::size_of;
+use std::mem::{self, size_of};
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 
 use libc::*;
@@ -198,7 +198,9 @@ impl FromRawFd for VsockListener {
 
 impl IntoRawFd for VsockListener {
     fn into_raw_fd(self) -> RawFd {
-        self.socket
+        let fd = self.socket;
+        mem::forget(self);
+        fd
     }
 }
 
@@ -478,7 +480,9 @@ impl FromRawFd for VsockStream {
 
 impl IntoRawFd for VsockStream {
     fn into_raw_fd(self) -> RawFd {
-        self.socket
+        let fd = self.socket;
+        mem::forget(self);
+        fd
     }
 }
 
