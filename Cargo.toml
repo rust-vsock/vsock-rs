@@ -5,6 +5,7 @@ authors = ["fsyncd", "rust-vsock"]
 description = "Virtio socket support for Rust"
 repository = "https://github.com/rust-vsock/vsock-rs"
 homepage = "https://github.com/rust-vsock/vsock-rs"
+readme = "README.md"
 license = "Apache-2.0"
 edition = "2018"
 exclude = ["test_fixture"]
