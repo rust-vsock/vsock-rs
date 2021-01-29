@@ -1,9 +1,10 @@
 [package]
 name = "vsock"
-version = "0.2.1"
-authors = ["fsyncd"]
+version = "0.2.2"
+authors = ["fsyncd", "rust-vsock"]
 description = "Virtio socket support for Rust"
-repository = "https://github.com/fsyncd/vsock-rs"
+repository = "https://github.com/rust-vsock/vsock-rs"
+homepage = "https://github.com/rust-vsock/vsock-rs"
 license = "Apache-2.0"
 edition = "2018"
 exclude = ["test_fixture"]
