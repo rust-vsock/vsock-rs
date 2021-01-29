@@ -12,7 +12,7 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
- 
+
 TOOLCHAIN := x86_64-unknown-linux-musl
 VPATH = target/system target/$(TOOLCHAIN)/debug target/$(TOOLCHAIN)/release
 
@@ -23,10 +23,16 @@ ID := $(shell date +%s)
 
 all: vsock echo_server
 
-check: vsock echo_server
-	cargo fmt --all -- --check
-	cargo clippy --all-targets --all-features -- -D warnings
+check: vsock echo_server test
+
+test:
 	cargo test --all
+
+fmt:
+	cargo fmt --all -- --check
+
+clippy:
+	cargo clippy --all-targets --all-features -- -D warnings
 
 clean:
 	cargo clean
@@ -47,7 +53,12 @@ kmod:
 # Start a virtio socket enabled vm
 vm: initrd.cpio
 	sudo qemu-system-x86_64 -kernel test_fixture/bzImage -initrd target/$(TOOLCHAIN)/debug/initrd.cpio \
-		-enable-kvm -m 256 -device vhost-vsock-pci,id=vhost-vsock-pci0,guest-cid=3,disable-legacy=on -nographic -append "console=ttyS0"
+		-enable-kvm -m 256 -device vhost-vsock-pci,id=vhost-vsock-pci0,guest-cid=3 -nographic -append "console=ttyS0"
+
+# Start a virtio socket enabled vm in background
+vm-for-action: initrd.cpio
+	sudo qemu-system-x86_64 -kernel test_fixture/bzImage -initrd target/$(TOOLCHAIN)/debug/initrd.cpio \
+		-m 256 -device vhost-vsock-pci,id=vhost-vsock-pci0,guest-cid=3 -display none -daemonize -append "console=ttyS0"
 
 # Create a simple operating system image for the vm
 initrd.cpio: echo_server
