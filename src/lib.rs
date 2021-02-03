@@ -22,10 +22,11 @@ use std::mem::{self, size_of};
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 
 use libc::*;
-use nix::sys::socket::{SockAddr, VsockAddr};
 use std::ffi::c_void;
 use std::net::Shutdown;
 use std::time::Duration;
+
+pub use nix::sys::socket::{SockAddr, VsockAddr};
 
 fn new_socket() -> libc::c_int {
     unsafe { socket(AF_VSOCK, SOCK_STREAM | SOCK_CLOEXEC, 0) }
