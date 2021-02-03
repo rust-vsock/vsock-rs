@@ -89,6 +89,11 @@ impl VsockListener {
         Ok(Self { socket })
     }
 
+    /// Create a new VsockListener with specified cid and port.
+    pub fn bind_with_cid_port(cid: u32, port: u32) -> Result<VsockListener> {
+        Self::bind(&SockAddr::Vsock(VsockAddr::new(cid, port)))
+    }
+
     /// The local socket address of the listener.
     pub fn local_addr(&self) -> Result<SockAddr> {
         let mut vsock_addr = sockaddr_vm {
@@ -245,6 +250,11 @@ impl VsockStream {
         } else {
             Ok(unsafe { VsockStream::from_raw_fd(sock) })
         }
+    }
+
+    /// Open a connection to a remote host with specified cid and port.
+    pub fn connect_with_cid_port(cid: u32, port: u32) -> Result<Self> {
+        Self::connect(&SockAddr::Vsock(VsockAddr::new(cid, port)))
     }
 
     /// Virtio socket address of the remote peer associated with this connection.
