@@ -15,12 +15,11 @@
  */
 
 use clap::{crate_authors, crate_version, App, Arg};
-use nix::sys::socket::{SockAddr, VsockAddr};
 use std::io::Read;
 use std::io::Write;
 use std::net::Shutdown;
 use std::thread;
-use vsock::VsockListener;
+use vsock::{SockAddr, VsockAddr, VsockListener};
 
 const BLOCK_SIZE: usize = 16384;
 

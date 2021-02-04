@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 
-use nix::sys::socket::{SockAddr, VsockAddr};
 use rand::RngCore;
 use sha2::{Digest, Sha256};
 use std::io::{Read, Write};
-use vsock::VsockStream;
+use vsock::{SockAddr, VsockAddr, VsockStream};
 
 const TEST_BLOB_SIZE: usize = 1_000_000;
 const TEST_BLOCK_SIZE: usize = 5_000;
