@@ -134,10 +134,11 @@ impl VsockListener {
         };
         let mut vsock_addr_len = size_of::<sockaddr_vm>() as socklen_t;
         let socket = unsafe {
-            accept(
+            accept4(
                 self.socket,
                 &mut vsock_addr as *mut _ as *mut sockaddr,
                 &mut vsock_addr_len,
+                SOCK_CLOEXEC,
             )
         };
         if socket < 0 {
