@@ -26,6 +26,7 @@ use std::ffi::c_void;
 use std::net::Shutdown;
 use std::time::Duration;
 
+pub use libc::{VMADDR_CID_ANY, VMADDR_CID_HOST, VMADDR_CID_HYPERVISOR, VMADDR_CID_LOCAL};
 pub use nix::sys::socket::{SockAddr, VsockAddr};
 
 fn new_socket() -> libc::c_int {
