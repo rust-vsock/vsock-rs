@@ -17,15 +17,17 @@
 
 //! Virtio socket support for Rust.
 
+use libc::*;
+use nix::ioctl_read_bad;
+use std::ffi::c_void;
+use std::fs::File;
 use std::io::{Error, ErrorKind, Read, Result, Write};
 use std::mem::{self, size_of};
-use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
-
-use libc::*;
-use std::ffi::c_void;
 use std::net::Shutdown;
+use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 use std::time::Duration;
 
+pub use libc::{VMADDR_CID_ANY, VMADDR_CID_HOST, VMADDR_CID_HYPERVISOR, VMADDR_CID_LOCAL};
 pub use nix::sys::socket::{SockAddr, VsockAddr};
 
 fn new_socket() -> libc::c_int {
@@ -504,4 +506,23 @@ impl Drop for VsockStream {
     fn drop(&mut self) {
         unsafe { close(self.socket) };
     }
+}
+
+const IOCTL_VM_SOCKETS_GET_LOCAL_CID: usize = 0x7b9;
+ioctl_read_bad!(
+    vm_sockets_get_local_cid,
+    IOCTL_VM_SOCKETS_GET_LOCAL_CID,
+    u32
+);
+
+/// Gets the CID of the local machine.
+///
+/// Note that when calling [`VsockListener::bind`], you should generally use [`VMADDR_CID_ANY`]
+/// instead, and for making a loopback connection you should use [`VMADDR_CID_LOCAL`].
+pub fn get_local_cid() -> Result<u32> {
+    let f = File::open("/dev/vsock")?;
+    let mut cid = 0;
+    // SAFETY: the kernel only modifies the given u32 integer.
+    unsafe { vm_sockets_get_local_cid(f.as_raw_fd(), &mut cid) }?;
+    Ok(cid)
 }

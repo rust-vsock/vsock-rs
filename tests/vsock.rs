@@ -17,7 +17,7 @@
 use rand::RngCore;
 use sha2::{Digest, Sha256};
 use std::io::{Read, Write};
-use vsock::{SockAddr, VsockAddr, VsockStream};
+use vsock::{get_local_cid, SockAddr, VsockAddr, VsockStream, VMADDR_CID_HOST};
 
 const TEST_BLOB_SIZE: usize = 1_000_000;
 const TEST_BLOCK_SIZE: usize = 5_000;
@@ -66,4 +66,9 @@ fn test_vsock() {
     let actual = Sha256::digest(&rx_blob);
 
     assert_eq!(expected, actual);
+}
+
+#[test]
+fn test_get_local_cid() {
+    assert_eq!(get_local_cid().unwrap(), VMADDR_CID_HOST);
 }
