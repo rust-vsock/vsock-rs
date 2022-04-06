@@ -123,7 +123,7 @@ impl VsockListener {
         let res = unsafe {
             bind(
                 socket,
-                transmute::<&SOCKADDR_HV, &SOCKADDR>(&addr),
+                transmute::<&SOCKADDR_HV, &SOCKADDR>(addr),
                 size_of::<SOCKADDR_HV>() as i32,
             )
         };
@@ -260,7 +260,7 @@ impl VsockStream {
         if unsafe {
             connect(
                 sock,
-                transmute::<&SOCKADDR_HV, &SOCKADDR>(&addr),
+                transmute::<&SOCKADDR_HV, &SOCKADDR>(addr),
                 size_of::<SOCKADDR_HV>() as i32,
             )
         } == SOCKET_ERROR
