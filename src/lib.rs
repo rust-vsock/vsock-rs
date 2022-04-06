@@ -35,9 +35,9 @@ pub use win::{svcid_from_port, Incoming, VsockListener, VsockStream};
 #[cfg(target_os = "windows")]
 pub use windows::core::GUID;
 #[cfg(target_os = "windows")]
-pub use windows::Win32::Networking::WinSock::{SOCKADDR, SOCKET};
+pub use windows::Win32::Networking::WinSock::{AF_HYPERV, SOCKADDR, SOCKET};
 #[cfg(target_os = "windows")]
 pub use windows::Win32::System::Hypervisor::{
     HV_GUID_BROADCAST, HV_GUID_CHILDREN, HV_GUID_LOOPBACK, HV_GUID_PARENT, HV_GUID_VSOCK_TEMPLATE,
-    HV_GUID_ZERO, HV_PROTOCOL_RAW, SOCKADDR_HV,
+    HV_GUID_ZERO, SOCKADDR_HV,
 };

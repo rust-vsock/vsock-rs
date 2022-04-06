@@ -24,6 +24,8 @@ use std::ptr;
 use vsock::{get_local_cid, SockAddr, VsockAddr, VsockStream, VMADDR_CID_HOST};
 
 #[cfg(target_os = "windows")]
+use uuid::Uuid;
+#[cfg(target_os = "windows")]
 use vsock::{svcid_from_port, VsockStream};
 #[cfg(target_os = "windows")]
 use widestring::U16CString;
@@ -37,8 +39,6 @@ use windows::Win32::System::HostComputeSystem::{
 };
 #[cfg(target_os = "windows")]
 use windows::Win32::System::Memory::LocalFree;
-#[cfg(target_os = "windows")]
-use uuid::Uuid;
 
 #[cfg(target_os = "windows")]
 #[allow(dead_code)]
