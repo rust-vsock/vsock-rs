@@ -41,7 +41,7 @@ vsock: $(SRCS)
 	cargo build --lib
 
 echo_server: vsock echo_server/src/main.rs
-	cargo build --manifest-path=echo_server/Cargo.toml
+	cargo build --manifest-path=echo_server/Cargo.toml --target $(TOOLCHAIN)
 
 # Set up required host kernel modules
 kmod:

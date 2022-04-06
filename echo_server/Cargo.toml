@@ -10,6 +10,3 @@ edition = "2018"
 clap = "2.33.3"
 libc = "0.2.79"
 vsock = { path = "../" }
-
-[build]
-target = "x86_64-unknown-linux-musl"
