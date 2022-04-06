@@ -18,25 +18,25 @@
 //! Virtio socket support for Rust.
 
 // UNIX exports
-#[cfg(target_os = "unix")]
+#[cfg(unix)]
 mod unix;
-#[cfg(target_os = "unix")]
+#[cfg(unix)]
 pub use libc::{VMADDR_CID_ANY, VMADDR_CID_HOST, VMADDR_CID_HYPERVISOR, VMADDR_CID_LOCAL};
-#[cfg(target_os = "unix")]
+#[cfg(unix)]
 pub use nix::sys::socket::{SockAddr, VsockAddr};
-#[cfg(target_os = "unix")]
+#[cfg(unix)]
 pub use unix::{get_local_cid, Incoming, VsockListener, VsockStream};
 
 // Windows exports
-#[cfg(target_os = "windows")]
+#[cfg(windows)]
 mod win;
-#[cfg(target_os = "windows")]
+#[cfg(windows)]
 pub use win::{svcid_from_port, Incoming, VsockListener, VsockStream};
-#[cfg(target_os = "windows")]
+#[cfg(windows)]
 pub use windows::core::GUID;
-#[cfg(target_os = "windows")]
+#[cfg(windows)]
 pub use windows::Win32::Networking::WinSock::{AF_HYPERV, SOCKADDR, SOCKET};
-#[cfg(target_os = "windows")]
+#[cfg(windows)]
 pub use windows::Win32::System::Hypervisor::{
     HV_GUID_BROADCAST, HV_GUID_CHILDREN, HV_GUID_LOOPBACK, HV_GUID_PARENT, HV_GUID_VSOCK_TEMPLATE,
     HV_GUID_ZERO, SOCKADDR_HV,
