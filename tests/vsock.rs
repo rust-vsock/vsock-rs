@@ -15,32 +15,34 @@
  */
 
 use rand::RngCore;
-use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::io::{Read, Write};
-use std::ptr;
 
-#[cfg(target_os = "unix")]
+#[cfg(unix)]
 use vsock::{get_local_cid, SockAddr, VsockAddr, VsockStream, VMADDR_CID_HOST};
 
-#[cfg(target_os = "windows")]
+#[cfg(windows)]
+use serde::Deserialize;
+#[cfg(windows)]
+use std::ptr;
+#[cfg(windows)]
 use uuid::Uuid;
-#[cfg(target_os = "windows")]
+#[cfg(windows)]
 use vsock::{svcid_from_port, VsockStream};
-#[cfg(target_os = "windows")]
+#[cfg(windows)]
 use widestring::U16CString;
-#[cfg(target_os = "windows")]
+#[cfg(windows)]
 use windows::core::GUID;
-#[cfg(target_os = "windows")]
+#[cfg(windows)]
 use windows::core::PCWSTR;
-#[cfg(target_os = "windows")]
+#[cfg(windows)]
 use windows::Win32::System::HostComputeSystem::{
     HcsCreateOperation, HcsEnumerateComputeSystems, HcsWaitForOperationResult,
 };
-#[cfg(target_os = "windows")]
+#[cfg(windows)]
 use windows::Win32::System::Memory::LocalFree;
 
-#[cfg(target_os = "windows")]
+#[cfg(windows)]
 #[allow(dead_code)]
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "PascalCase")]
@@ -52,7 +54,7 @@ struct ComputeSystem {
     pub state: String,
 }
 
-#[cfg(target_os = "windows")]
+#[cfg(windows)]
 unsafe fn get_first_vm() -> GUID {
     let op = HcsCreateOperation(ptr::null(), None);
     if op.is_invalid() {
@@ -89,10 +91,10 @@ fn test_vsock() {
     rx_blob.resize(TEST_BLOB_SIZE, 0);
     rng.fill_bytes(&mut blob);
 
-    #[cfg(target_os = "unix")]
+    #[cfg(unix)]
     let mut stream =
         VsockStream::connect(&SockAddr::Vsock(VsockAddr::new(3, 8000))).expect("connection failed");
-    #[cfg(target_os = "windows")]
+    #[cfg(windows)]
     let mut stream =
         VsockStream::connect_with_vmid_svcid(unsafe { get_first_vm() }, svcid_from_port(8000))
             .expect("connection failed");
@@ -124,7 +126,7 @@ fn test_vsock() {
 }
 
 #[test]
-#[cfg(target_os = "unix")]
+#[cfg(unix)]
 fn test_get_local_cid() {
     assert_eq!(get_local_cid().unwrap(), VMADDR_CID_HOST);
 }
