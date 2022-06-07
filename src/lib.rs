@@ -18,7 +18,7 @@
 //! Virtio socket support for Rust.
 
 use libc::*;
-use nix::ioctl_read_bad;
+use nix::{ioctl_read_bad, sys::socket::AddressFamily};
 use std::ffi::c_void;
 use std::fs::File;
 use std::io::{Error, ErrorKind, Read, Result, Write};
@@ -28,7 +28,7 @@ use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 use std::time::Duration;
 
 pub use libc::{VMADDR_CID_ANY, VMADDR_CID_HOST, VMADDR_CID_HYPERVISOR, VMADDR_CID_LOCAL};
-pub use nix::sys::socket::{SockAddr, VsockAddr};
+pub use nix::sys::socket::{SockaddrLike, VsockAddr};
 
 fn new_socket() -> libc::c_int {
     unsafe { socket(AF_VSOCK, SOCK_STREAM | SOCK_CLOEXEC, 0) }
@@ -56,28 +56,20 @@ pub struct VsockListener {
 
 impl VsockListener {
     /// Create a new VsockListener which is bound and listening on the socket address.
-    pub fn bind(addr: &SockAddr) -> Result<VsockListener> {
-        let mut vsock_addr = if let SockAddr::Vsock(addr) = addr {
-            addr.as_ref().to_owned()
-        } else {
+    pub fn bind(addr: &impl SockaddrLike) -> Result<Self> {
+        if addr.family() != Some(AddressFamily::Vsock) {
             return Err(Error::new(
                 ErrorKind::Other,
                 "requires a virtio socket address",
             ));
-        };
+        }
 
         let socket = new_socket();
         if socket < 0 {
             return Err(Error::last_os_error());
         }
 
-        let res = unsafe {
-            bind(
-                socket,
-                &mut vsock_addr as *mut _ as *mut sockaddr,
-                size_of::<sockaddr_vm>() as socklen_t,
-            )
-        };
+        let res = unsafe { bind(socket, addr.as_ptr(), addr.len()) };
         if res < 0 {
             return Err(Error::last_os_error());
         }
@@ -93,11 +85,11 @@ impl VsockListener {
 
     /// Create a new VsockListener with specified cid and port.
     pub fn bind_with_cid_port(cid: u32, port: u32) -> Result<VsockListener> {
-        Self::bind(&SockAddr::Vsock(VsockAddr::new(cid, port)))
+        Self::bind(&VsockAddr::new(cid, port))
     }
 
     /// The local socket address of the listener.
-    pub fn local_addr(&self) -> Result<SockAddr> {
+    pub fn local_addr(&self) -> Result<VsockAddr> {
         let mut vsock_addr = sockaddr_vm {
             svm_family: AF_VSOCK as sa_family_t,
             svm_reserved1: 0,
@@ -116,10 +108,7 @@ impl VsockListener {
         {
             Err(Error::last_os_error())
         } else {
-            Ok(SockAddr::Vsock(VsockAddr::new(
-                vsock_addr.svm_cid,
-                vsock_addr.svm_port,
-            )))
+            Ok(VsockAddr::new(vsock_addr.svm_cid, vsock_addr.svm_port))
         }
     }
 
@@ -129,7 +118,7 @@ impl VsockListener {
     }
 
     /// Accept a new incoming connection from this listener.
-    pub fn accept(&self) -> Result<(VsockStream, SockAddr)> {
+    pub fn accept(&self) -> Result<(VsockStream, VsockAddr)> {
         let mut vsock_addr = sockaddr_vm {
             svm_family: AF_VSOCK as sa_family_t,
             svm_reserved1: 0,
@@ -151,7 +140,7 @@ impl VsockListener {
         } else {
             Ok((
                 unsafe { VsockStream::from_raw_fd(socket as RawFd) },
-                SockAddr::Vsock(VsockAddr::new(vsock_addr.svm_cid, vsock_addr.svm_port)),
+                VsockAddr::new(vsock_addr.svm_cid, vsock_addr.svm_port),
             ))
         }
     }
@@ -230,41 +219,32 @@ pub struct VsockStream {
 
 impl VsockStream {
     /// Open a connection to a remote host.
-    pub fn connect(addr: &SockAddr) -> Result<Self> {
-        let vsock_addr = if let SockAddr::Vsock(addr) = addr {
-            addr.as_ref()
-        } else {
+    pub fn connect(addr: &impl SockaddrLike) -> Result<Self> {
+        if addr.family() != Some(AddressFamily::Vsock) {
             return Err(Error::new(
                 ErrorKind::Other,
                 "requires a virtio socket address",
             ));
-        };
+        }
 
         let sock = new_socket();
         if sock < 0 {
             return Err(Error::last_os_error());
         }
-        if unsafe {
-            connect(
-                sock,
-                vsock_addr as *const _ as *const sockaddr,
-                size_of::<sockaddr_vm>() as socklen_t,
-            )
-        } < 0
-        {
+        if unsafe { connect(sock, addr.as_ptr(), addr.len()) } < 0 {
             Err(Error::last_os_error())
         } else {
-            Ok(unsafe { VsockStream::from_raw_fd(sock) })
+            Ok(unsafe { Self::from_raw_fd(sock) })
         }
     }
 
     /// Open a connection to a remote host with specified cid and port.
     pub fn connect_with_cid_port(cid: u32, port: u32) -> Result<Self> {
-        Self::connect(&SockAddr::Vsock(VsockAddr::new(cid, port)))
+        Self::connect(&VsockAddr::new(cid, port))
     }
 
     /// Virtio socket address of the remote peer associated with this connection.
-    pub fn peer_addr(&self) -> Result<SockAddr> {
+    pub fn peer_addr(&self) -> Result<VsockAddr> {
         let mut vsock_addr = sockaddr_vm {
             svm_family: AF_VSOCK as sa_family_t,
             svm_reserved1: 0,
@@ -283,15 +263,12 @@ impl VsockStream {
         {
             Err(Error::last_os_error())
         } else {
-            Ok(SockAddr::Vsock(VsockAddr::new(
-                vsock_addr.svm_cid,
-                vsock_addr.svm_port,
-            )))
+            Ok(VsockAddr::new(vsock_addr.svm_cid, vsock_addr.svm_port))
         }
     }
 
     /// Virtio socket address of the local address associated with this connection.
-    pub fn local_addr(&self) -> Result<SockAddr> {
+    pub fn local_addr(&self) -> Result<VsockAddr> {
         let mut vsock_addr = sockaddr_vm {
             svm_family: AF_VSOCK as sa_family_t,
             svm_reserved1: 0,
@@ -310,10 +287,7 @@ impl VsockStream {
         {
             Err(Error::last_os_error())
         } else {
-            Ok(SockAddr::Vsock(VsockAddr::new(
-                vsock_addr.svm_cid,
-                vsock_addr.svm_port,
-            )))
+            Ok(VsockAddr::new(vsock_addr.svm_cid, vsock_addr.svm_port))
         }
     }
 
