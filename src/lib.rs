@@ -17,7 +17,12 @@
 
 //! Virtio socket support for Rust.
 
-use libc::*;
+use libc::{
+    accept4, bind, close, connect, getpeername, getsockname, getsockopt, ioctl, listen, recv,
+    sa_family_t, send, setsockopt, shutdown, sockaddr, sockaddr_vm, socket, socklen_t, suseconds_t,
+    timeval, AF_VSOCK, FIONBIO, MSG_NOSIGNAL, SHUT_RD, SHUT_RDWR, SHUT_WR, SOCK_CLOEXEC,
+    SOCK_STREAM, SOL_SOCKET, SO_ERROR, SO_RCVTIMEO, SO_SNDTIMEO,
+};
 use nix::{ioctl_read_bad, sys::socket::AddressFamily};
 use std::ffi::c_void;
 use std::fs::File;
@@ -394,10 +399,10 @@ impl VsockStream {
 
                 // https://github.com/rust-lang/libc/issues/1848
                 #[cfg_attr(target_env = "musl", allow(deprecated))]
-                let secs = if dur.as_secs() > time_t::max_value() as u64 {
-                    time_t::max_value()
+                let secs = if dur.as_secs() > libc::time_t::max_value() as u64 {
+                    libc::time_t::max_value()
                 } else {
-                    dur.as_secs() as time_t
+                    dur.as_secs() as libc::time_t
                 };
                 let mut timeout = timeval {
                     tv_sec: secs,
