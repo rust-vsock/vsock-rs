@@ -58,7 +58,7 @@ impl VsockListener {
     /// Create a new VsockListener which is bound and listening on the socket address.
     pub fn bind(addr: &SockAddr) -> Result<VsockListener> {
         let mut vsock_addr = if let SockAddr::Vsock(addr) = addr {
-            addr.0
+            addr.as_ref().to_owned()
         } else {
             return Err(Error::new(
                 ErrorKind::Other,
@@ -116,7 +116,10 @@ impl VsockListener {
         {
             Err(Error::last_os_error())
         } else {
-            Ok(SockAddr::Vsock(VsockAddr(vsock_addr)))
+            Ok(SockAddr::Vsock(VsockAddr::new(
+                vsock_addr.svm_cid,
+                vsock_addr.svm_port,
+            )))
         }
     }
 
@@ -229,7 +232,7 @@ impl VsockStream {
     /// Open a connection to a remote host.
     pub fn connect(addr: &SockAddr) -> Result<Self> {
         let vsock_addr = if let SockAddr::Vsock(addr) = addr {
-            addr.0
+            addr.as_ref()
         } else {
             return Err(Error::new(
                 ErrorKind::Other,
@@ -244,7 +247,7 @@ impl VsockStream {
         if unsafe {
             connect(
                 sock,
-                &vsock_addr as *const _ as *const sockaddr,
+                vsock_addr as *const _ as *const sockaddr,
                 size_of::<sockaddr_vm>() as socklen_t,
             )
         } < 0
@@ -280,7 +283,10 @@ impl VsockStream {
         {
             Err(Error::last_os_error())
         } else {
-            Ok(SockAddr::Vsock(VsockAddr(vsock_addr)))
+            Ok(SockAddr::Vsock(VsockAddr::new(
+                vsock_addr.svm_cid,
+                vsock_addr.svm_port,
+            )))
         }
     }
 
@@ -304,7 +310,10 @@ impl VsockStream {
         {
             Err(Error::last_os_error())
         } else {
-            Ok(SockAddr::Vsock(VsockAddr(vsock_addr)))
+            Ok(SockAddr::Vsock(VsockAddr::new(
+                vsock_addr.svm_cid,
+                vsock_addr.svm_port,
+            )))
         }
     }
 
