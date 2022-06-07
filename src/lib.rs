@@ -18,13 +18,13 @@
 //! Virtio socket support for Rust.
 
 use libc::{
-    accept4, getpeername, getsockname, ioctl, sa_family_t, sockaddr, sockaddr_vm, socklen_t,
-    suseconds_t, timeval, AF_VSOCK, FIONBIO, SOCK_CLOEXEC,
+    accept4, ioctl, sa_family_t, sockaddr, sockaddr_vm, socklen_t, suseconds_t, timeval, AF_VSOCK,
+    FIONBIO, SOCK_CLOEXEC,
 };
 use nix::{
     ioctl_read_bad,
     sys::socket::{
-        self, bind, connect, listen, recv, send, shutdown, socket,
+        self, bind, connect, getpeername, getsockname, listen, recv, send, shutdown, socket,
         sockopt::{ReceiveTimeout, SendTimeout, SocketError},
         AddressFamily, GetSockOpt, MsgFlags, SetSockOpt, SockFlag, SockType,
     },
@@ -96,26 +96,7 @@ impl VsockListener {
 
     /// The local socket address of the listener.
     pub fn local_addr(&self) -> Result<VsockAddr> {
-        let mut vsock_addr = sockaddr_vm {
-            svm_family: AF_VSOCK as sa_family_t,
-            svm_reserved1: 0,
-            svm_port: 0,
-            svm_cid: 0,
-            svm_zero: [0u8; 4],
-        };
-        let mut vsock_addr_len = size_of::<sockaddr_vm>() as socklen_t;
-        if unsafe {
-            getsockname(
-                self.socket,
-                &mut vsock_addr as *mut _ as *mut sockaddr,
-                &mut vsock_addr_len,
-            )
-        } < 0
-        {
-            Err(Error::last_os_error())
-        } else {
-            Ok(VsockAddr::new(vsock_addr.svm_cid, vsock_addr.svm_port))
-        }
+        Ok(getsockname(self.socket)?)
     }
 
     /// Create a new independently owned handle to the underlying socket.
@@ -231,50 +212,12 @@ impl VsockStream {
 
     /// Virtio socket address of the remote peer associated with this connection.
     pub fn peer_addr(&self) -> Result<VsockAddr> {
-        let mut vsock_addr = sockaddr_vm {
-            svm_family: AF_VSOCK as sa_family_t,
-            svm_reserved1: 0,
-            svm_port: 0,
-            svm_cid: 0,
-            svm_zero: [0u8; 4],
-        };
-        let mut vsock_addr_len = size_of::<sockaddr_vm>() as socklen_t;
-        if unsafe {
-            getpeername(
-                self.socket,
-                &mut vsock_addr as *mut _ as *mut sockaddr,
-                &mut vsock_addr_len,
-            )
-        } < 0
-        {
-            Err(Error::last_os_error())
-        } else {
-            Ok(VsockAddr::new(vsock_addr.svm_cid, vsock_addr.svm_port))
-        }
+        Ok(getpeername(self.socket)?)
     }
 
     /// Virtio socket address of the local address associated with this connection.
     pub fn local_addr(&self) -> Result<VsockAddr> {
-        let mut vsock_addr = sockaddr_vm {
-            svm_family: AF_VSOCK as sa_family_t,
-            svm_reserved1: 0,
-            svm_port: 0,
-            svm_cid: 0,
-            svm_zero: [0u8; 4],
-        };
-        let mut vsock_addr_len = size_of::<sockaddr_vm>() as socklen_t;
-        if unsafe {
-            getsockname(
-                self.socket,
-                &mut vsock_addr as *mut _ as *mut sockaddr,
-                &mut vsock_addr_len,
-            )
-        } < 0
-        {
-            Err(Error::last_os_error())
-        } else {
-            Ok(VsockAddr::new(vsock_addr.svm_cid, vsock_addr.svm_port))
-        }
+        Ok(getsockname(self.socket)?)
     }
 
     /// Shutdown the read, write, or both halves of this connection.
