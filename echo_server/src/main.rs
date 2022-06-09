@@ -19,7 +19,7 @@ use std::io::Read;
 use std::io::Write;
 use std::net::Shutdown;
 use std::thread;
-use vsock::{SockAddr, VsockAddr, VsockListener};
+use vsock::{VsockAddr, VsockListener};
 
 const BLOCK_SIZE: usize = 16384;
 
@@ -48,11 +48,8 @@ fn main() {
         .parse::<u32>()
         .expect("port must be a valid integer");
 
-    let listener = VsockListener::bind(&SockAddr::Vsock(VsockAddr::new(
-        libc::VMADDR_CID_ANY,
-        listen_port,
-    )))
-    .expect("bind and listen failed");
+    let listener = VsockListener::bind(&VsockAddr::new(libc::VMADDR_CID_ANY, listen_port))
+        .expect("bind and listen failed");
 
     println!("Server listening for connections on port {}", listen_port);
     for stream in listener.incoming() {

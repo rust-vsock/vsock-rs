@@ -17,7 +17,7 @@
 use rand::RngCore;
 use sha2::{Digest, Sha256};
 use std::io::{Read, Write};
-use vsock::{get_local_cid, SockAddr, VsockAddr, VsockStream, VMADDR_CID_HOST};
+use vsock::{get_local_cid, VsockAddr, VsockStream, VMADDR_CID_HOST};
 
 const TEST_BLOB_SIZE: usize = 1_000_000;
 const TEST_BLOCK_SIZE: usize = 5_000;
@@ -39,8 +39,7 @@ fn test_vsock() {
     rx_blob.resize(TEST_BLOB_SIZE, 0);
     rng.fill_bytes(&mut blob);
 
-    let mut stream =
-        VsockStream::connect(&SockAddr::Vsock(VsockAddr::new(3, 8000))).expect("connection failed");
+    let mut stream = VsockStream::connect(&VsockAddr::new(3, 8000)).expect("connection failed");
 
     while tx_pos < TEST_BLOB_SIZE {
         let written_bytes = stream
