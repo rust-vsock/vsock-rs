@@ -92,7 +92,9 @@ fn test_stream_addresses() {
         VsockStream::connect(&VsockAddr::new(SERVER_CID, SERVER_PORT)).expect("connection failed");
 
     let local_addr = stream.local_addr().unwrap();
-    assert_eq!(local_addr.cid(), libc::VMADDR_CID_ANY);
+    // Apparently on some systems a client socket has the host CID, on some it has CID_ANY. Allow
+    // either.
+    assert!([libc::VMADDR_CID_ANY, VMADDR_CID_HOST].contains(&local_addr.cid()));
 
     let peer_addr = stream.peer_addr().unwrap();
     assert_eq!(peer_addr.cid(), SERVER_CID);
