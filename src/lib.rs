@@ -199,7 +199,7 @@ impl IntoRawFd for VsockListener {
 
 impl Drop for VsockListener {
     fn drop(&mut self) {
-        _ = close(self.socket);
+        let _ = close(self.socket);
     }
 }
 
@@ -412,7 +412,7 @@ impl IntoRawFd for VsockStream {
 
 impl Drop for VsockStream {
     fn drop(&mut self) {
-        _ = close(self.socket);
+        let _ = close(self.socket);
     }
 }
 
