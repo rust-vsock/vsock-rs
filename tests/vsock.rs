@@ -17,10 +17,14 @@
 use rand::RngCore;
 use sha2::{Digest, Sha256};
 use std::io::{Read, Write};
-use vsock::{get_local_cid, VsockAddr, VsockStream, VMADDR_CID_HOST};
+use vsock::{get_local_cid, VsockAddr, VsockListener, VsockStream, VMADDR_CID_HOST};
 
 const TEST_BLOB_SIZE: usize = 1_000_000;
 const TEST_BLOCK_SIZE: usize = 5_000;
+
+const SERVER_CID: u32 = 3;
+const SERVER_PORT: u32 = 8000;
+const LISTEN_PORT: u32 = 9000;
 
 /// A simple test for the vsock implementation.
 /// Generate a large random blob of binary data, and transfer it in chunks over the VsockStream
@@ -39,7 +43,8 @@ fn test_vsock() {
     rx_blob.resize(TEST_BLOB_SIZE, 0);
     rng.fill_bytes(&mut blob);
 
-    let mut stream = VsockStream::connect(&VsockAddr::new(3, 8000)).expect("connection failed");
+    let mut stream =
+        VsockStream::connect(&VsockAddr::new(SERVER_CID, SERVER_PORT)).expect("connection failed");
 
     while tx_pos < TEST_BLOB_SIZE {
         let written_bytes = stream
@@ -70,4 +75,28 @@ fn test_vsock() {
 #[test]
 fn test_get_local_cid() {
     assert_eq!(get_local_cid().unwrap(), VMADDR_CID_HOST);
+}
+
+#[test]
+fn test_listener_local_addr() {
+    let listener = VsockListener::bind(&VsockAddr::new(VMADDR_CID_HOST, LISTEN_PORT)).unwrap();
+
+    let local_addr = listener.local_addr().unwrap();
+    assert_eq!(local_addr.cid(), VMADDR_CID_HOST);
+    assert_eq!(local_addr.port(), LISTEN_PORT);
+}
+
+#[test]
+fn test_stream_addresses() {
+    let stream =
+        VsockStream::connect(&VsockAddr::new(SERVER_CID, SERVER_PORT)).expect("connection failed");
+
+    let local_addr = stream.local_addr().unwrap();
+    // Apparently on some systems a client socket has the host CID, on some it has CID_ANY. Allow
+    // either.
+    assert!([libc::VMADDR_CID_ANY, VMADDR_CID_HOST].contains(&local_addr.cid()));
+
+    let peer_addr = stream.peer_addr().unwrap();
+    assert_eq!(peer_addr.cid(), SERVER_CID);
+    assert_eq!(peer_addr.port(), SERVER_PORT);
 }
