@@ -11,8 +11,8 @@ edition = "2018"
 exclude = ["test_fixture"]
 
 [dependencies]
-libc = "0.2.79"
-nix = "0.24.1"
+libc = "0.2.126"
+nix = "0.24.2"
 
 [dev-dependencies]
 rand = "0.8.3"
