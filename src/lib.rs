@@ -238,13 +238,13 @@ impl VsockStream {
     /// Set the timeout on read operations.
     pub fn set_read_timeout(&self, dur: Option<Duration>) -> Result<()> {
         let timeout = Self::timeval_from_duration(dur)?.into();
-        Ok(SendTimeout.set(self.socket, &timeout)?)
+        Ok(ReceiveTimeout.set(self.socket, &timeout)?)
     }
 
     /// Set the timeout on write operations.
     pub fn set_write_timeout(&self, dur: Option<Duration>) -> Result<()> {
         let timeout = Self::timeval_from_duration(dur)?.into();
-        Ok(ReceiveTimeout.set(self.socket, &timeout)?)
+        Ok(SendTimeout.set(self.socket, &timeout)?)
     }
 
     /// Retrieve the latest error associated with the underlying socket.
