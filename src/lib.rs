@@ -43,14 +43,12 @@ pub use libc::{VMADDR_CID_ANY, VMADDR_CID_HOST, VMADDR_CID_HYPERVISOR, VMADDR_CI
 pub use nix::sys::socket::{SockaddrLike, VsockAddr};
 
 fn new_socket() -> Result<OwnedFd> {
-    let fd = socket(
+    Ok(socket(
         AddressFamily::Vsock,
         SockType::Stream,
         SockFlag::SOCK_CLOEXEC,
         None,
-    )?;
-    // SAFETY: We just created a new file descriptor, so we can take ownership of it.
-    unsafe { Ok(OwnedFd::from_raw_fd(fd)) }
+    )?)
 }
 
 /// An iterator that infinitely accepts connections on a VsockListener.
@@ -88,7 +86,7 @@ impl VsockListener {
         bind(socket.as_raw_fd(), addr)?;
 
         // rust stdlib uses a 128 connection backlog
-        listen(socket.as_raw_fd(), 128)?;
+        listen(&socket, 128)?;
 
         Ok(Self { socket })
     }
@@ -145,7 +143,7 @@ impl VsockListener {
 
     /// Retrieve the latest error associated with the underlying socket.
     pub fn take_error(&self) -> Result<Option<Error>> {
-        let error = SocketError.get(self.socket.as_raw_fd())?;
+        let error = SocketError.get(&self.socket)?;
         Ok(if error == 0 {
             None
         } else {
@@ -246,18 +244,18 @@ impl VsockStream {
     /// Set the timeout on read operations.
     pub fn set_read_timeout(&self, dur: Option<Duration>) -> Result<()> {
         let timeout = Self::timeval_from_duration(dur)?.into();
-        Ok(ReceiveTimeout.set(self.socket.as_raw_fd(), &timeout)?)
+        Ok(ReceiveTimeout.set(&self.socket, &timeout)?)
     }
 
     /// Set the timeout on write operations.
     pub fn set_write_timeout(&self, dur: Option<Duration>) -> Result<()> {
         let timeout = Self::timeval_from_duration(dur)?.into();
-        Ok(SendTimeout.set(self.socket.as_raw_fd(), &timeout)?)
+        Ok(SendTimeout.set(&self.socket, &timeout)?)
     }
 
     /// Retrieve the latest error associated with the underlying socket.
     pub fn take_error(&self) -> Result<Option<Error>> {
-        let error = SocketError.get(self.socket.as_raw_fd())?;
+        let error = SocketError.get(&self.socket)?;
         Ok(if error == 0 {
             None
         } else {
