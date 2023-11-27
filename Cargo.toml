@@ -7,7 +7,7 @@ repository = "https://github.com/rust-vsock/vsock-rs"
 homepage = "https://github.com/rust-vsock/vsock-rs"
 readme = "README.md"
 license = "Apache-2.0"
-edition = "2018"
+edition = "2021"
 exclude = ["test_fixture"]
 
 [dependencies]
