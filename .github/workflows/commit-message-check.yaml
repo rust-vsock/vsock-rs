@@ -36,7 +36,7 @@ jobs:
 
     - name: Check Subject Line Length
       if: ${{ success() || failure() }}
-      uses: tim-actions/commit-message-checker-with-regex@v0.3.1
+      uses: tim-actions/commit-message-checker-with-regex@v0.3.2
       with:
         commits: ${{ steps.get-pr-commits.outputs.commits }}
         pattern: '^.{0,75}(\n.*)*$'
@@ -45,9 +45,9 @@ jobs:
 
     - name: Check Body Line Length
       if: ${{ success() || failure() }}
-      uses: tim-actions/commit-message-checker-with-regex@v0.3.1
+      uses: tim-actions/commit-message-checker-with-regex@v0.3.2
       with:
         commits: ${{ steps.get-pr-commits.outputs.commits }}
-        pattern: '^.+(\n.{0,72})*$|^.+\n\s*[^a-zA-Z\s\n]|^.+\n\S+$'
+        pattern: '^.+(\n.{0,72})*$|^.+\n\s*[^a-zA-Z\s\n]|^.+\n\S+$|\nSigned-off-by: dependabot\[bot\]'
         error: 'Body line too long (max 72)'
         post_error: ${{ env.error_msg }}
