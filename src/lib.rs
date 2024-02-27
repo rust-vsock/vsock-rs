@@ -26,7 +26,7 @@ use nix::{
     sys::socket::{
         self, bind, connect, getpeername, getsockname, listen, recv, send, shutdown, socket,
         sockopt::{ReceiveTimeout, SendTimeout, SocketError},
-        AddressFamily, GetSockOpt, MsgFlags, SetSockOpt, SockFlag, SockType,
+        AddressFamily, Backlog, GetSockOpt, MsgFlags, SetSockOpt, SockFlag, SockType,
     },
 };
 use std::mem::size_of;
@@ -86,7 +86,7 @@ impl VsockListener {
         bind(socket.as_raw_fd(), addr)?;
 
         // rust stdlib uses a 128 connection backlog
-        listen(&socket, 128)?;
+        listen(&socket, Backlog::new(128).unwrap_or(Backlog::MAXCONN))?;
 
         Ok(Self { socket })
     }
