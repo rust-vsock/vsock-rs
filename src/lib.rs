@@ -18,8 +18,8 @@
 //! Virtio socket support for Rust.
 
 use libc::{
-    accept4, ioctl, sa_family_t, sockaddr, sockaddr_vm, socklen_t, suseconds_t, timeval, AF_VSOCK,
-    FIONBIO, SOCK_CLOEXEC,
+    accept, fcntl, ioctl, sa_family_t, sockaddr, sockaddr_vm, socklen_t, suseconds_t, timeval,
+    AF_VSOCK, FD_CLOEXEC, FIONBIO, F_SETFD,
 };
 use nix::{
     ioctl_read_bad,
@@ -28,6 +28,7 @@ use nix::{
         sockopt::{ReceiveTimeout, SendTimeout, SocketError},
         AddressFamily, Backlog, GetSockOpt, MsgFlags, SetSockOpt, SockFlag, SockType,
     },
+    unistd::close,
 };
 use std::mem::size_of;
 use std::net::Shutdown;
@@ -123,14 +124,17 @@ impl VsockListener {
         };
         let mut vsock_addr_len = size_of::<sockaddr_vm>() as socklen_t;
         let socket = unsafe {
-            accept4(
+            accept(
                 self.socket.as_raw_fd(),
                 &mut vsock_addr as *mut _ as *mut sockaddr,
                 &mut vsock_addr_len,
-                SOCK_CLOEXEC,
             )
         };
         if socket < 0 {
+            return Err(Error::last_os_error());
+        }
+        if unsafe { fcntl(socket, F_SETFD, FD_CLOEXEC) } < 0 {
+            close(socket)?;
             Err(Error::last_os_error())
         } else {
             Ok((
