@@ -45,12 +45,11 @@ pub use libc::{VMADDR_CID_ANY, VMADDR_CID_HOST, VMADDR_CID_HYPERVISOR};
 pub use nix::sys::socket::{SockaddrLike, VsockAddr};
 
 fn new_socket() -> Result<OwnedFd> {
-    Ok(socket(
-        AddressFamily::Vsock,
-        SockType::Stream,
-        SockFlag::SOCK_CLOEXEC,
-        None,
-    )?)
+    #[cfg(not(target_os = "macos"))]
+    let flags = SockFlag::SOCK_CLOEXEC;
+    #[cfg(target_os = "macos")]
+    let flags = SockFlag::empty();
+    Ok(socket(AddressFamily::Vsock, SockType::Stream, flags, None)?)
 }
 
 /// An iterator that infinitely accepts connections on a VsockListener.
@@ -117,7 +116,10 @@ impl VsockListener {
             svm_reserved1: 0,
             svm_port: 0,
             svm_cid: 0,
+            #[cfg(not(target_os = "macos"))]
             svm_zero: [0u8; 4],
+            #[cfg(target_os = "macos")]
+            svm_len: size_of::<sockaddr_vm>() as u8,
         };
         let mut vsock_addr_len = size_of::<sockaddr_vm>() as socklen_t;
         let socket = unsafe {
@@ -333,7 +335,11 @@ impl Read for &VsockStream {
 
 impl Write for &VsockStream {
     fn write(&mut self, buf: &[u8]) -> Result<usize> {
-        Ok(send(self.socket.as_raw_fd(), buf, MsgFlags::MSG_NOSIGNAL)?)
+        #[cfg(not(target_os = "macos"))]
+        let flags = MsgFlags::MSG_NOSIGNAL;
+        #[cfg(target_os = "macos")]
+        let flags = MsgFlags::empty();
+        Ok(send(self.socket.as_raw_fd(), buf, flags)?)
     }
 
     fn flush(&mut self) -> Result<()> {
