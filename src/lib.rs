@@ -39,7 +39,9 @@ use std::{
     os::fd::{AsFd, BorrowedFd},
 };
 
-pub use libc::{VMADDR_CID_ANY, VMADDR_CID_HOST, VMADDR_CID_HYPERVISOR, VMADDR_CID_LOCAL};
+#[cfg(any(target_os = "linux", target_os = "android"))]
+pub use libc::VMADDR_CID_LOCAL;
+pub use libc::{VMADDR_CID_ANY, VMADDR_CID_HOST, VMADDR_CID_HYPERVISOR};
 pub use nix::sys::socket::{SockaddrLike, VsockAddr};
 
 fn new_socket() -> Result<OwnedFd> {
