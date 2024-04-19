@@ -18,8 +18,8 @@
 //! Virtio socket support for Rust.
 
 use libc::{
-    accept4, ioctl, sa_family_t, sockaddr, sockaddr_vm, socklen_t, suseconds_t, timeval, AF_VSOCK,
-    FIONBIO, SOCK_CLOEXEC,
+    accept, fcntl, ioctl, sa_family_t, sockaddr, sockaddr_vm, socklen_t, suseconds_t, timeval,
+    AF_VSOCK, FD_CLOEXEC, FIONBIO, F_SETFD,
 };
 use nix::{
     ioctl_read_bad,
@@ -28,6 +28,7 @@ use nix::{
         sockopt::{ReceiveTimeout, SendTimeout, SocketError},
         AddressFamily, Backlog, GetSockOpt, MsgFlags, SetSockOpt, SockFlag, SockType,
     },
+    unistd::close,
 };
 use std::mem::size_of;
 use std::net::Shutdown;
@@ -39,16 +40,17 @@ use std::{
     os::fd::{AsFd, BorrowedFd},
 };
 
-pub use libc::{VMADDR_CID_ANY, VMADDR_CID_HOST, VMADDR_CID_HYPERVISOR, VMADDR_CID_LOCAL};
+#[cfg(any(target_os = "linux", target_os = "android"))]
+pub use libc::VMADDR_CID_LOCAL;
+pub use libc::{VMADDR_CID_ANY, VMADDR_CID_HOST, VMADDR_CID_HYPERVISOR};
 pub use nix::sys::socket::{SockaddrLike, VsockAddr};
 
 fn new_socket() -> Result<OwnedFd> {
-    Ok(socket(
-        AddressFamily::Vsock,
-        SockType::Stream,
-        SockFlag::SOCK_CLOEXEC,
-        None,
-    )?)
+    #[cfg(not(target_os = "macos"))]
+    let flags = SockFlag::SOCK_CLOEXEC;
+    #[cfg(target_os = "macos")]
+    let flags = SockFlag::empty();
+    Ok(socket(AddressFamily::Vsock, SockType::Stream, flags, None)?)
 }
 
 /// An iterator that infinitely accepts connections on a VsockListener.
@@ -115,18 +117,24 @@ impl VsockListener {
             svm_reserved1: 0,
             svm_port: 0,
             svm_cid: 0,
+            #[cfg(not(target_os = "macos"))]
             svm_zero: [0u8; 4],
+            #[cfg(target_os = "macos")]
+            svm_len: size_of::<sockaddr_vm>() as u8,
         };
         let mut vsock_addr_len = size_of::<sockaddr_vm>() as socklen_t;
         let socket = unsafe {
-            accept4(
+            accept(
                 self.socket.as_raw_fd(),
                 &mut vsock_addr as *mut _ as *mut sockaddr,
                 &mut vsock_addr_len,
-                SOCK_CLOEXEC,
             )
         };
         if socket < 0 {
+            return Err(Error::last_os_error());
+        }
+        if unsafe { fcntl(socket, F_SETFD, FD_CLOEXEC) } < 0 {
+            close(socket)?;
             Err(Error::last_os_error())
         } else {
             Ok((
@@ -331,7 +339,11 @@ impl Read for &VsockStream {
 
 impl Write for &VsockStream {
     fn write(&mut self, buf: &[u8]) -> Result<usize> {
-        Ok(send(self.socket.as_raw_fd(), buf, MsgFlags::MSG_NOSIGNAL)?)
+        #[cfg(not(target_os = "macos"))]
+        let flags = MsgFlags::MSG_NOSIGNAL;
+        #[cfg(target_os = "macos")]
+        let flags = MsgFlags::empty();
+        Ok(send(self.socket.as_raw_fd(), buf, flags)?)
     }
 
     fn flush(&mut self) -> Result<()> {
