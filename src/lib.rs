@@ -293,8 +293,8 @@ impl VsockStream {
 
                 // https://github.com/rust-lang/libc/issues/1848
                 #[cfg_attr(target_env = "musl", allow(deprecated))]
-                let secs = if dur.as_secs() > libc::time_t::max_value() as u64 {
-                    libc::time_t::max_value()
+                let secs = if dur.as_secs() > libc::time_t::MAX as u64 {
+                    libc::time_t::MAX
                 } else {
                     dur.as_secs() as libc::time_t
                 };
