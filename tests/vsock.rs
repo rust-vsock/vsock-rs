@@ -34,7 +34,7 @@ const LISTEN_PORT: u32 = 9000;
 /// semantics.
 #[test]
 fn test_vsock() {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
     let mut blob: Vec<u8> = vec![];
     let mut rx_blob = vec![];
     let mut tx_pos = 0;

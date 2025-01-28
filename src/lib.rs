@@ -59,7 +59,7 @@ pub struct Incoming<'a> {
     listener: &'a VsockListener,
 }
 
-impl<'a> Iterator for Incoming<'a> {
+impl Iterator for Incoming<'_> {
     type Item = Result<VsockStream>;
 
     fn next(&mut self) -> Option<Result<VsockStream>> {
