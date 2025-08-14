@@ -77,10 +77,7 @@ impl VsockListener {
     /// Create a new VsockListener which is bound and listening on the socket address.
     pub fn bind(addr: &impl SockaddrLike) -> Result<Self> {
         if addr.family() != Some(AddressFamily::Vsock) {
-            return Err(Error::new(
-                ErrorKind::Other,
-                "requires a virtio socket address",
-            ));
+            return Err(Error::other("requires a virtio socket address"));
         }
 
         let socket = new_socket()?;
@@ -206,10 +203,7 @@ impl VsockStream {
     /// Open a connection to a remote host.
     pub fn connect(addr: &impl SockaddrLike) -> Result<Self> {
         if addr.family() != Some(AddressFamily::Vsock) {
-            return Err(Error::new(
-                ErrorKind::Other,
-                "requires a virtio socket address",
-            ));
+            return Err(Error::other("requires a virtio socket address"));
         }
 
         let socket = new_socket()?;
