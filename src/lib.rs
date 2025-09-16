@@ -185,7 +185,7 @@ impl VsockListener {
     }
 
     /// An iterator over the connections being received on this listener.
-    pub fn incoming(&self) -> Incoming {
+    pub fn incoming(&self) -> Incoming<'_> {
         Incoming { listener: self }
     }
 
@@ -217,7 +217,7 @@ impl AsRawFd for VsockListener {
 }
 
 impl AsFd for VsockListener {
-    fn as_fd(&self) -> BorrowedFd {
+    fn as_fd(&self) -> BorrowedFd<'_> {
         self.socket.as_fd()
     }
 }
@@ -534,7 +534,7 @@ impl AsRawFd for VsockStream {
 }
 
 impl AsFd for VsockStream {
-    fn as_fd(&self) -> BorrowedFd {
+    fn as_fd(&self) -> BorrowedFd<'_> {
         self.socket.as_fd()
     }
 }
