@@ -17,7 +17,7 @@
 use rand::RngCore;
 use sha2::{Digest, Sha256};
 use std::io::{Read, Write};
-use vsock::{get_local_cid, VsockAddr, VsockListener, VsockStream, VMADDR_CID_HOST};
+use vsock::{get_local_cid, SocketAddr, VsockListener, VsockStream, VMADDR_CID_HOST};
 
 const TEST_BLOB_SIZE: usize = 1_000_000;
 const TEST_BLOCK_SIZE: usize = 5_000;
@@ -44,7 +44,7 @@ fn test_vsock() {
     rng.fill_bytes(&mut blob);
 
     let mut stream =
-        VsockStream::connect(&VsockAddr::new(SERVER_CID, SERVER_PORT)).expect("connection failed");
+        VsockStream::connect(SocketAddr::new(SERVER_CID, SERVER_PORT)).expect("connection failed");
 
     while tx_pos < TEST_BLOB_SIZE {
         let written_bytes = stream
@@ -79,7 +79,7 @@ fn test_get_local_cid() {
 
 #[test]
 fn test_listener_local_addr() {
-    let listener = VsockListener::bind(&VsockAddr::new(VMADDR_CID_HOST, LISTEN_PORT)).unwrap();
+    let listener = VsockListener::bind(SocketAddr::new(VMADDR_CID_HOST, LISTEN_PORT)).unwrap();
 
     let local_addr = listener.local_addr().unwrap();
     assert_eq!(local_addr.cid(), VMADDR_CID_HOST);
@@ -89,12 +89,12 @@ fn test_listener_local_addr() {
 #[test]
 fn test_stream_addresses() {
     let stream =
-        VsockStream::connect(&VsockAddr::new(SERVER_CID, SERVER_PORT)).expect("connection failed");
+        VsockStream::connect(SocketAddr::new(SERVER_CID, SERVER_PORT)).expect("connection failed");
 
     let local_addr = stream.local_addr().unwrap();
     // Apparently on some systems a client socket has the host CID, on some it has CID_ANY. Allow
     // either.
-    assert!([libc::VMADDR_CID_ANY, VMADDR_CID_HOST].contains(&local_addr.cid()));
+    assert!([vsock::VMADDR_CID_ANY, VMADDR_CID_HOST].contains(&local_addr.cid()));
 
     let peer_addr = stream.peer_addr().unwrap();
     assert_eq!(peer_addr.cid(), SERVER_CID);

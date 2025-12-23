@@ -11,8 +11,7 @@ edition = "2021"
 exclude = ["test_fixture"]
 
 [dependencies]
-libc = "0.2.158"
-nix = { version = "0.30.1", features = ["ioctl", "socket"] }
+rustix = { git = "https://github.com/forkgull/rustix", branch = "notgull/vsock", default-features = false, features = ["std", "net"] }
 
 [dev-dependencies]
 rand = "0.9.0"

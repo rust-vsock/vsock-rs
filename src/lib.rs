@@ -17,84 +17,55 @@
 
 //! Virtio socket support for Rust.
 
-use libc::{
-    accept, fcntl, ioctl, sa_family_t, sockaddr, sockaddr_vm, socklen_t, suseconds_t, timeval,
-    AF_VSOCK, FD_CLOEXEC, FIONBIO, F_SETFD,
-};
-use nix::{
-    ioctl_read_bad,
-    sys::socket::{
-        self, bind, connect, getpeername, getsockname, listen, recv, recvfrom, send, sendto,
-        shutdown, socket,
-        sockopt::{ReceiveTimeout, SendTimeout, SocketError},
-        AddressFamily, Backlog, GetSockOpt, MsgFlags, SetSockOpt, SockFlag, SockType,
-    },
-    unistd::close,
-};
-use std::mem::size_of;
+#![deny(unsafe_code)]
+
+use rustix::{io, net};
+
 use std::net::Shutdown;
 use std::os::unix::io::{AsRawFd, FromRawFd, IntoRawFd, RawFd};
 use std::time::Duration;
 use std::{fs::File, os::fd::OwnedFd};
 use std::{
-    io::{Error, ErrorKind, Read, Result, Write},
+    io::{Error, Read, Result, Write},
     os::fd::{AsFd, BorrowedFd},
 };
 
-#[cfg(any(target_os = "linux", target_os = "android"))]
-pub use libc::VMADDR_CID_LOCAL;
-pub use libc::{VMADDR_CID_ANY, VMADDR_CID_HOST, VMADDR_CID_HYPERVISOR};
-pub use nix::sys::socket::{SockaddrLike, VsockAddr};
-
-fn new_socket(ty: SockType) -> Result<OwnedFd> {
+fn new_socket(ty: net::SocketType) -> Result<OwnedFd> {
     #[cfg(not(target_os = "macos"))]
-    let flags = SockFlag::SOCK_CLOEXEC;
+    let flags = net::SocketFlags::CLOEXEC;
     #[cfg(target_os = "macos")]
-    let flags = SockFlag::empty();
-    Ok(socket(AddressFamily::Vsock, ty, flags, None)?)
+    let flags = net::SocketFlags::empty();
+
+    let socket = net::socket_with(net::AddressFamily::VSOCK, ty, flags, None)?;
+    Ok(socket)
 }
 
-fn default_send_msg_flags() -> MsgFlags {
+fn default_send_msg_flags() -> net::SendFlags {
     #[cfg(not(target_os = "macos"))]
-    let flags = MsgFlags::MSG_NOSIGNAL;
+    let flags = net::SendFlags::NOSIGNAL;
     #[cfg(target_os = "macos")]
-    let flags = MsgFlags::empty();
+    let flags = net::SendFlags::empty();
     flags
 }
 
-/// Internal helper to turn a [`Duration`] into a [`timeval`]
-fn timeval_from_duration(dur: Option<Duration>) -> Result<timeval> {
-    match dur {
-        Some(dur) => {
-            if dur.as_secs() == 0 && dur.subsec_nanos() == 0 {
-                return Err(Error::new(
-                    ErrorKind::InvalidInput,
-                    "cannot set a zero duration timeout",
-                ));
-            }
-
-            // https://github.com/rust-lang/libc/issues/1848
-            #[cfg_attr(target_env = "musl", allow(deprecated))]
-            let secs = if dur.as_secs() > libc::time_t::MAX as u64 {
-                libc::time_t::MAX
-            } else {
-                dur.as_secs() as libc::time_t
-            };
-            let mut timeout = timeval {
-                tv_sec: secs,
-                tv_usec: i64::from(dur.subsec_micros()) as suseconds_t,
-            };
-            if timeout.tv_sec == 0 && timeout.tv_usec == 0 {
-                timeout.tv_usec = 1;
-            }
-            Ok(timeout)
-        }
-        None => Ok(timeval {
-            tv_sec: 0,
-            tv_usec: 0,
-        }),
+#[inline]
+fn cvt_addr(addr: Option<net::SocketAddrAny>) -> Result<SocketAddr> {
+    match addr {
+        Some(addr) => Ok(SocketAddr::from_rustix(addr.try_into()?)),
+        None => Err(Error::other("no address found")),
     }
 }
+
+/// CID to connect to any host.
+pub const VMADDR_CID_ANY: u32 = 0xFFFFFFFF;
+/// CID to connect to the hypervisor.
+pub const VMADDR_CID_HYPERVISOR: u32 = 0;
+/// CID to connect to the local host.
+pub const VMADDR_CID_LOCAL: u32 = 1;
+/// CID to connect to the host.
+pub const VMADDR_CID_HOST: u32 = 2;
+/// Connect to any port.
+pub const VMADDR_PORT_ANY: u32 = 0xFFFFFFFF;
 
 /// An iterator that infinitely accepts connections on a VsockListener.
 #[derive(Debug)]
@@ -110,6 +81,50 @@ impl Iterator for Incoming<'_> {
     }
 }
 
+/// Socket address for a VSock.
+#[derive(Debug, Copy, Clone)]
+pub struct SocketAddr {
+    cid: u32,
+    port: u32,
+}
+
+impl SocketAddr {
+    /// Create a new [`SocketAddr`].
+    pub fn new(cid: u32, port: u32) -> Self {
+        Self { cid, port }
+    }
+
+    /// Get the CID.
+    pub fn cid(&self) -> u32 {
+        self.cid
+    }
+
+    /// Set the CID.
+    pub fn set_cid(&mut self, cid: u32) {
+        self.cid = cid;
+    }
+
+    /// Get the port.
+    pub fn port(&self) -> u32 {
+        self.port
+    }
+
+    /// Set the port.
+    pub fn set_port(&mut self, port: u32) {
+        self.port = port;
+    }
+
+    /// Convert to the `rustix` address.
+    fn to_rustix(self) -> net::vsock::SocketAddrVSock {
+        net::vsock::SocketAddrVSock::new(self.cid, self.port)
+    }
+
+    /// Convert from the `rustix` address.
+    fn from_rustix(r: net::vsock::SocketAddrVSock) -> Self {
+        Self::new(r.cid(), r.port())
+    }
+}
+
 /// A virtio socket server, listening for connections.
 #[derive(Debug)]
 pub struct VsockListener {
@@ -118,29 +133,26 @@ pub struct VsockListener {
 
 impl VsockListener {
     /// Create a new VsockListener which is bound and listening on the socket address.
-    pub fn bind(addr: &impl SockaddrLike) -> Result<Self> {
-        if addr.family() != Some(AddressFamily::Vsock) {
-            return Err(Error::other("requires a virtio socket address"));
-        }
+    pub fn bind(addr: SocketAddr) -> Result<Self> {
+        let socket = new_socket(net::SocketType::STREAM)?;
 
-        let socket = new_socket(SockType::Stream)?;
-
-        bind(socket.as_raw_fd(), addr)?;
+        net::bind(&socket, &addr.to_rustix())?;
 
         // rust stdlib uses a 128 connection backlog
-        listen(&socket, Backlog::new(128).unwrap_or(Backlog::MAXCONN))?;
+        net::listen(&socket, 128)?;
 
         Ok(Self { socket })
     }
 
     /// Create a new VsockListener with specified cid and port.
     pub fn bind_with_cid_port(cid: u32, port: u32) -> Result<VsockListener> {
-        Self::bind(&VsockAddr::new(cid, port))
+        Self::bind(SocketAddr::new(cid, port))
     }
 
     /// The local socket address of the listener.
-    pub fn local_addr(&self) -> Result<VsockAddr> {
-        Ok(getsockname(self.socket.as_raw_fd())?)
+    pub fn local_addr(&self) -> Result<SocketAddr> {
+        let addr = net::getsockname(&self.socket)?;
+        Ok(SocketAddr::from_rustix(addr.try_into()?))
     }
 
     /// Create a new independently owned handle to the underlying socket.
@@ -151,37 +163,12 @@ impl VsockListener {
     }
 
     /// Accept a new incoming connection from this listener.
-    pub fn accept(&self) -> Result<(VsockStream, VsockAddr)> {
-        let mut vsock_addr = sockaddr_vm {
-            svm_family: AF_VSOCK as sa_family_t,
-            svm_reserved1: 0,
-            svm_port: 0,
-            svm_cid: 0,
-            #[cfg(not(target_os = "macos"))]
-            svm_zero: [0u8; 4],
-            #[cfg(target_os = "macos")]
-            svm_len: size_of::<sockaddr_vm>() as u8,
-        };
-        let mut vsock_addr_len = size_of::<sockaddr_vm>() as socklen_t;
-        let socket = unsafe {
-            accept(
-                self.socket.as_raw_fd(),
-                &mut vsock_addr as *mut _ as *mut sockaddr,
-                &mut vsock_addr_len,
-            )
-        };
-        if socket < 0 {
-            return Err(Error::last_os_error());
-        }
-        if unsafe { fcntl(socket, F_SETFD, FD_CLOEXEC) } < 0 {
-            close(socket)?;
-            Err(Error::last_os_error())
-        } else {
-            Ok((
-                unsafe { VsockStream::from_raw_fd(socket as RawFd) },
-                VsockAddr::new(vsock_addr.svm_cid, vsock_addr.svm_port),
-            ))
-        }
+    pub fn accept(&self) -> Result<(VsockStream, SocketAddr)> {
+        let (stream, addr) = net::acceptfrom(&self.socket)?;
+        let addr = cvt_addr(addr)?;
+
+        io::fcntl_setfd(&stream, io::FdFlags::CLOEXEC)?;
+        Ok((VsockStream { socket: stream }, addr))
     }
 
     /// An iterator over the connections being received on this listener.
@@ -191,22 +178,17 @@ impl VsockListener {
 
     /// Retrieve the latest error associated with the underlying socket.
     pub fn take_error(&self) -> Result<Option<Error>> {
-        let error = SocketError.get(&self.socket)?;
-        Ok(if error == 0 {
-            None
-        } else {
-            Some(Error::from_raw_os_error(error))
-        })
+        let error = net::sockopt::socket_error(&self.socket)?;
+        match error {
+            Ok(()) => Ok(None),
+            Err(err) => Ok(Some(err.into())),
+        }
     }
 
     /// Move this stream in and out of nonblocking mode.
     pub fn set_nonblocking(&self, nonblocking: bool) -> Result<()> {
-        let mut nonblocking: i32 = if nonblocking { 1 } else { 0 };
-        if unsafe { ioctl(self.socket.as_raw_fd(), FIONBIO, &mut nonblocking) } < 0 {
-            Err(Error::last_os_error())
-        } else {
-            Ok(())
-        }
+        io::ioctl_fionbio(&self.socket, nonblocking)?;
+        Ok(())
     }
 }
 
@@ -223,6 +205,7 @@ impl AsFd for VsockListener {
 }
 
 impl FromRawFd for VsockListener {
+    #[allow(unsafe_code)]
     unsafe fn from_raw_fd(socket: RawFd) -> Self {
         Self {
             socket: OwnedFd::from_raw_fd(socket),
@@ -248,21 +231,17 @@ impl VsockSocket {
     /// Bind to an address and listen for connections.
     ///
     /// Analogous to [`std::net::UdpSocket::bind`]
-    pub fn bind<A: SockaddrLike>(addr: &A) -> Result<Self> {
-        if addr.family() != Some(AddressFamily::Vsock) {
-            return Err(Error::other("requires a virtio socket address"));
-        }
+    pub fn bind(addr: SocketAddr) -> Result<Self> {
+        let socket = new_socket(net::SocketType::DGRAM)?;
 
-        let socket = new_socket(SockType::Datagram)?;
-
-        bind(socket.as_raw_fd(), addr)?;
+        net::bind(&socket, &addr.to_rustix())?;
 
         Ok(Self { socket })
     }
 
     /// Bind to a specified cid and port and listen for connections.
     pub fn bind_with_cid_port(cid: u32, port: u32) -> Result<Self> {
-        Self::bind(&VsockAddr::new(cid, port))
+        Self::bind(SocketAddr::new(cid, port))
     }
 
     /// Receive a message from a remote host.
@@ -272,34 +251,41 @@ impl VsockSocket {
     /// # Returns
     ///
     /// The number of bytes read and the address of the remote host.
-    pub fn recv_from(&self, buf: &mut [u8]) -> Result<(usize, VsockAddr)> {
-        recvfrom(self.socket.as_raw_fd(), buf)
-            // UNWRAP SAFETY: recvfrom should always return peer address when SockType == SockType::Datagram
-            .map(|(size, addr)| (size, addr.expect("recv_from didn't return peer address")))
-            .map_err(nix::Error::into)
+    pub fn recv_from(&self, buf: &mut [u8]) -> Result<(usize, SocketAddr)> {
+        let (recv, _, addr) = net::recvfrom(&self.socket, buf, net::RecvFlags::empty())?;
+        let addr = cvt_addr(addr)?;
+
+        Ok((recv, addr))
     }
 
     /// Send a message to a remote host.
     ///
     /// Analogous to [`std::net::UdpSocket::send_to`]
-    pub fn send_to<A: SockaddrLike>(&self, buf: &[u8], addr: &A) -> Result<usize> {
-        sendto(self.socket.as_raw_fd(), buf, addr, default_send_msg_flags())
-            .map_err(nix::Error::into)
+    pub fn send_to(&self, buf: &[u8], addr: SocketAddr) -> Result<usize> {
+        let sent = net::sendto(
+            &self.socket,
+            buf,
+            default_send_msg_flags(),
+            &addr.to_rustix(),
+        )?;
+        Ok(sent)
     }
 
     /// Send a message to a remote host with specified cid and port.
     pub fn send_to_with_cid_port(&self, buf: &[u8], cid: u32, port: u32) -> Result<usize> {
-        self.send_to(buf, &VsockAddr::new(cid, port))
+        self.send_to(buf, SocketAddr::new(cid, port))
     }
 
     /// Virtio socket address of the remote peer associated with this connection.
-    pub fn peer_addr(&self) -> Result<VsockAddr> {
-        Ok(getpeername(self.socket.as_raw_fd())?)
+    pub fn peer_addr(&self) -> Result<SocketAddr> {
+        cvt_addr(net::getpeername(&self.socket)?)
     }
 
     /// Virtio socket address of the local address associated with this connection.
-    pub fn local_addr(&self) -> Result<VsockAddr> {
-        Ok(getsockname(self.socket.as_raw_fd())?)
+    pub fn local_addr(&self) -> Result<SocketAddr> {
+        Ok(SocketAddr::from_rustix(
+            net::getsockname(&self.socket)?.try_into()?,
+        ))
     }
 
     /// Create a new independently owned handle to the underlying socket.
@@ -311,24 +297,23 @@ impl VsockSocket {
 
     /// Set the timeout on read operations.
     pub fn set_read_timeout(&self, dur: Option<Duration>) -> Result<()> {
-        let timeout = timeval_from_duration(dur)?.into();
-        Ok(ReceiveTimeout.set(&self.socket, &timeout)?)
+        net::sockopt::set_socket_timeout(&self.socket, net::sockopt::Timeout::Recv, dur)?;
+        Ok(())
     }
 
     /// Set the timeout on write operations.
     pub fn set_write_timeout(&self, dur: Option<Duration>) -> Result<()> {
-        let timeout = timeval_from_duration(dur)?.into();
-        Ok(SendTimeout.set(&self.socket, &timeout)?)
+        net::sockopt::set_socket_timeout(&self.socket, net::sockopt::Timeout::Send, dur)?;
+        Ok(())
     }
 
     /// Retrieve the latest error associated with the underlying socket.
     pub fn take_error(&self) -> Result<Option<Error>> {
-        let error = SocketError.get(&self.socket)?;
-        Ok(if error == 0 {
-            None
-        } else {
-            Some(Error::from_raw_os_error(error))
-        })
+        let error = net::sockopt::socket_error(&self.socket)?;
+        match error {
+            Ok(()) => Ok(None),
+            Err(err) => Ok(Some(err.into())),
+        }
     }
 
     /// Open a connection to a remote host (you need to bind to an address with [`Self::bind`]
@@ -338,12 +323,9 @@ impl VsockSocket {
     /// [`Self::recv`].
     ///
     /// Analogous to [`std::net::UdpSocket::connect`]
-    pub fn connect<A: SockaddrLike>(&self, addr: &A) -> Result<()> {
-        if addr.family() != Some(AddressFamily::Vsock) {
-            return Err(Error::other("requires a virtio socket address"));
-        }
-
-        connect(self.socket.as_raw_fd(), addr).map_err(nix::Error::into)
+    pub fn connect(&self, addr: SocketAddr) -> Result<()> {
+        net::connect(&self.socket, &addr.to_rustix())?;
+        Ok(())
     }
 
     /// Open a connection to a remote host with specified cid and port (you need to bind to an
@@ -352,31 +334,28 @@ impl VsockSocket {
     /// Allows you to send and receive messages from this host directly through [`Self::send`] and
     /// [`Self::recv`].
     pub fn connect_with_cid_port(&self, cid: u32, port: u32) -> Result<()> {
-        self.connect(&VsockAddr::new(cid, port))
+        self.connect(SocketAddr::new(cid, port))
     }
 
     /// Send data to the connected remote host.
     ///
     /// Analogous to [`std::net::UdpSocket::send`]
     pub fn send(&self, buf: &[u8]) -> Result<usize> {
-        send(self.socket.as_raw_fd(), buf, default_send_msg_flags()).map_err(nix::Error::into)
+        Ok(net::send(&self.socket, buf, default_send_msg_flags())?)
     }
 
     /// Receive data from the connected remote host.
     ///
     /// Analogous to [`std::net::UdpSocket::recv`]
     pub fn recv(&self, buf: &mut [u8]) -> Result<usize> {
-        recv(self.socket.as_raw_fd(), buf, MsgFlags::empty()).map_err(nix::Error::into)
+        let (recv, _) = net::recv(&self.socket, buf, net::RecvFlags::empty())?;
+        Ok(recv)
     }
 
     /// Move this stream in and out of nonblocking mode.
     pub fn set_nonblocking(&self, nonblocking: bool) -> Result<()> {
-        let mut nonblocking: i32 = if nonblocking { 1 } else { 0 };
-        if unsafe { ioctl(self.socket.as_raw_fd(), FIONBIO, &mut nonblocking) } < 0 {
-            Err(Error::last_os_error())
-        } else {
-            Ok(())
-        }
+        io::ioctl_fionbio(&self.socket, nonblocking)?;
+        Ok(())
     }
 }
 
@@ -392,6 +371,7 @@ impl AsRawFd for VsockSocket {
     }
 }
 
+#[allow(unsafe_code)]
 impl FromRawFd for VsockSocket {
     unsafe fn from_raw_fd(fd: RawFd) -> Self {
         Self {
@@ -416,39 +396,37 @@ pub struct VsockStream {
 
 impl VsockStream {
     /// Open a connection to a remote host.
-    pub fn connect(addr: &impl SockaddrLike) -> Result<Self> {
-        if addr.family() != Some(AddressFamily::Vsock) {
-            return Err(Error::other("requires a virtio socket address"));
-        }
-
-        let socket = new_socket(SockType::Stream)?;
-        connect(socket.as_raw_fd(), addr)?;
+    pub fn connect(addr: SocketAddr) -> Result<Self> {
+        let socket = new_socket(net::SocketType::STREAM)?;
+        net::connect(&socket, &addr.to_rustix())?;
         Ok(Self { socket })
     }
 
     /// Open a connection to a remote host with specified cid and port.
     pub fn connect_with_cid_port(cid: u32, port: u32) -> Result<Self> {
-        Self::connect(&VsockAddr::new(cid, port))
+        Self::connect(SocketAddr::new(cid, port))
     }
 
     /// Virtio socket address of the remote peer associated with this connection.
-    pub fn peer_addr(&self) -> Result<VsockAddr> {
-        Ok(getpeername(self.socket.as_raw_fd())?)
+    pub fn peer_addr(&self) -> Result<SocketAddr> {
+        cvt_addr(net::getpeername(&self.socket)?)
     }
 
     /// Virtio socket address of the local address associated with this connection.
-    pub fn local_addr(&self) -> Result<VsockAddr> {
-        Ok(getsockname(self.socket.as_raw_fd())?)
+    pub fn local_addr(&self) -> Result<SocketAddr> {
+        Ok(SocketAddr::from_rustix(
+            net::getsockname(&self.socket)?.try_into()?,
+        ))
     }
 
     /// Shutdown the read, write, or both halves of this connection.
     pub fn shutdown(&self, how: Shutdown) -> Result<()> {
         let how = match how {
-            Shutdown::Write => socket::Shutdown::Write,
-            Shutdown::Read => socket::Shutdown::Read,
-            Shutdown::Both => socket::Shutdown::Both,
+            Shutdown::Write => net::Shutdown::Write,
+            Shutdown::Read => net::Shutdown::Read,
+            Shutdown::Both => net::Shutdown::Both,
         };
-        Ok(shutdown(self.socket.as_raw_fd(), how)?)
+        Ok(net::shutdown(&self.socket, how)?)
     }
 
     /// Create a new independently owned handle to the underlying socket.
@@ -460,34 +438,29 @@ impl VsockStream {
 
     /// Set the timeout on read operations.
     pub fn set_read_timeout(&self, dur: Option<Duration>) -> Result<()> {
-        let timeout = timeval_from_duration(dur)?.into();
-        Ok(ReceiveTimeout.set(&self.socket, &timeout)?)
+        net::sockopt::set_socket_timeout(&self.socket, net::sockopt::Timeout::Recv, dur)?;
+        Ok(())
     }
 
     /// Set the timeout on write operations.
     pub fn set_write_timeout(&self, dur: Option<Duration>) -> Result<()> {
-        let timeout = timeval_from_duration(dur)?.into();
-        Ok(SendTimeout.set(&self.socket, &timeout)?)
+        net::sockopt::set_socket_timeout(&self.socket, net::sockopt::Timeout::Send, dur)?;
+        Ok(())
     }
 
     /// Retrieve the latest error associated with the underlying socket.
     pub fn take_error(&self) -> Result<Option<Error>> {
-        let error = SocketError.get(&self.socket)?;
-        Ok(if error == 0 {
-            None
-        } else {
-            Some(Error::from_raw_os_error(error))
-        })
+        let error = net::sockopt::socket_error(&self.socket)?;
+        match error {
+            Ok(()) => Ok(None),
+            Err(err) => Ok(Some(err.into())),
+        }
     }
 
     /// Move this stream in and out of nonblocking mode.
     pub fn set_nonblocking(&self, nonblocking: bool) -> Result<()> {
-        let mut nonblocking: i32 = if nonblocking { 1 } else { 0 };
-        if unsafe { ioctl(self.socket.as_raw_fd(), FIONBIO, &mut nonblocking) } < 0 {
-            Err(Error::last_os_error())
-        } else {
-            Ok(())
-        }
+        io::ioctl_fionbio(&self.socket, nonblocking)?;
+        Ok(())
     }
 }
 
@@ -509,17 +482,14 @@ impl Write for VsockStream {
 
 impl Read for &VsockStream {
     fn read(&mut self, buf: &mut [u8]) -> Result<usize> {
-        Ok(recv(self.socket.as_raw_fd(), buf, MsgFlags::empty())?)
+        let (recv, _) = net::recv(&self.socket, buf, net::RecvFlags::empty())?;
+        Ok(recv)
     }
 }
 
 impl Write for &VsockStream {
     fn write(&mut self, buf: &[u8]) -> Result<usize> {
-        Ok(send(
-            self.socket.as_raw_fd(),
-            buf,
-            default_send_msg_flags(),
-        )?)
+        Ok(net::send(&self.socket, buf, default_send_msg_flags())?)
     }
 
     fn flush(&mut self) -> Result<()> {
@@ -539,6 +509,7 @@ impl AsFd for VsockStream {
     }
 }
 
+#[allow(unsafe_code)]
 impl FromRawFd for VsockStream {
     unsafe fn from_raw_fd(socket: RawFd) -> Self {
         Self {
@@ -553,21 +524,25 @@ impl IntoRawFd for VsockStream {
     }
 }
 
-const IOCTL_VM_SOCKETS_GET_LOCAL_CID: usize = 0x7b9;
-ioctl_read_bad!(
-    vm_sockets_get_local_cid,
-    IOCTL_VM_SOCKETS_GET_LOCAL_CID,
-    u32
-);
-
 /// Gets the CID of the local machine.
 ///
 /// Note that when calling [`VsockListener::bind`], you should generally use [`VMADDR_CID_ANY`]
 /// instead, and for making a loopback connection you should use [`VMADDR_CID_LOCAL`].
+#[allow(unsafe_code)]
 pub fn get_local_cid() -> Result<u32> {
+    use rustix::ioctl;
+
+    const IOCTL_VM_SOCKETS_GET_LOCAL_CID: ioctl::Opcode = 0x7b9;
+
     let f = File::open("/dev/vsock")?;
-    let mut cid = 0;
+
     // SAFETY: the kernel only modifies the given u32 integer.
-    unsafe { vm_sockets_get_local_cid(f.as_raw_fd(), &mut cid) }?;
+    let cid = unsafe {
+        ioctl::ioctl(
+            &f,
+            ioctl::Getter::<IOCTL_VM_SOCKETS_GET_LOCAL_CID, u32>::new(),
+        )
+    }?;
+
     Ok(cid)
 }

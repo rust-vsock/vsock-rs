@@ -19,7 +19,7 @@ use std::io::Read;
 use std::io::Write;
 use std::net::Shutdown;
 use std::thread;
-use vsock::{VsockAddr, VsockListener};
+use vsock::{SocketAddr, VsockListener};
 
 const BLOCK_SIZE: usize = 16384;
 
@@ -48,7 +48,7 @@ fn main() {
         .parse::<u32>()
         .expect("port must be a valid integer");
 
-    let listener = VsockListener::bind(&VsockAddr::new(libc::VMADDR_CID_ANY, listen_port))
+    let listener = VsockListener::bind(SocketAddr::new(libc::VMADDR_CID_ANY, listen_port))
         .expect("bind and listen failed");
 
     println!("Server listening for connections on port {}", listen_port);
@@ -56,12 +56,11 @@ fn main() {
         match stream {
             Ok(mut stream) => {
                 println!(
-                    "New connection: {}",
+                    "New connection: {:?}",
                     stream.peer_addr().expect("unable to get peer address")
                 );
                 thread::spawn(move || {
-                    let mut buf = vec![];
-                    buf.resize(BLOCK_SIZE, 0);
+                    let mut buf = vec![0; BLOCK_SIZE];
                     loop {
                         let read_bytes = match stream.read(&mut buf) {
                             Ok(0) => break,
