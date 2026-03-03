@@ -11,7 +11,7 @@ edition = "2021"
 exclude = ["test_fixture"]
 
 [dependencies]
-libc = "0.2.158"
+libc = "0.2.182"
 nix = { version = "0.31.2", features = ["ioctl", "socket"] }
 
 [dev-dependencies]

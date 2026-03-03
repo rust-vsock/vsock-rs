@@ -18,16 +18,19 @@
 //! Virtio socket support for Rust.
 
 use libc::{
-    accept, fcntl, ioctl, sa_family_t, sockaddr, sockaddr_vm, socklen_t, suseconds_t, timeval,
-    AF_VSOCK, FD_CLOEXEC, FIONBIO, F_SETFD,
+    accept, fcntl, ioctl, sa_family_t, sockaddr, sockaddr_vm, socklen_t, timeval, AF_VSOCK,
+    FD_CLOEXEC, FIONBIO, F_SETFD,
 };
 use nix::{
     ioctl_read_bad,
-    sys::socket::{
-        self, bind, connect, getpeername, getsockname, listen, recv, recvfrom, send, sendto,
-        shutdown, socket,
-        sockopt::{ReceiveTimeout, SendTimeout, SocketError},
-        AddressFamily, Backlog, GetSockOpt, MsgFlags, SetSockOpt, SockFlag, SockType,
+    sys::{
+        socket::{
+            self, bind, connect, getpeername, getsockname, listen, recv, recvfrom, send, sendto,
+            shutdown, socket,
+            sockopt::{ReceiveTimeout, SendTimeout, SocketError},
+            AddressFamily, Backlog, GetSockOpt, MsgFlags, SetSockOpt, SockFlag, SockType,
+        },
+        time::TimeVal,
     },
     unistd::close,
 };
@@ -62,8 +65,8 @@ fn default_send_msg_flags() -> MsgFlags {
     flags
 }
 
-/// Internal helper to turn a [`Duration`] into a [`timeval`]
-fn timeval_from_duration(dur: Option<Duration>) -> Result<timeval> {
+/// Internal helper to turn a [`Duration`] into a [`TimeVal`].
+fn timeval_from_duration(dur: Option<Duration>) -> Result<TimeVal> {
     match dur {
         Some(dur) => {
             if dur.as_secs() == 0 && dur.subsec_nanos() == 0 {
@@ -80,19 +83,17 @@ fn timeval_from_duration(dur: Option<Duration>) -> Result<timeval> {
             } else {
                 dur.as_secs() as libc::time_t
             };
+            #[cfg_attr(target_env = "musl", allow(deprecated))]
             let mut timeout = timeval {
                 tv_sec: secs,
-                tv_usec: i64::from(dur.subsec_micros()) as suseconds_t,
+                tv_usec: i64::from(dur.subsec_micros()) as libc::suseconds_t,
             };
             if timeout.tv_sec == 0 && timeout.tv_usec == 0 {
                 timeout.tv_usec = 1;
             }
-            Ok(timeout)
+            Ok(timeout.into())
         }
-        None => Ok(timeval {
-            tv_sec: 0,
-            tv_usec: 0,
-        }),
+        None => Ok(TimeVal::new(0, 0)),
     }
 }
 
@@ -311,13 +312,13 @@ impl VsockSocket {
 
     /// Set the timeout on read operations.
     pub fn set_read_timeout(&self, dur: Option<Duration>) -> Result<()> {
-        let timeout = timeval_from_duration(dur)?.into();
+        let timeout = timeval_from_duration(dur)?;
         Ok(ReceiveTimeout.set(&self.socket, &timeout)?)
     }
 
     /// Set the timeout on write operations.
     pub fn set_write_timeout(&self, dur: Option<Duration>) -> Result<()> {
-        let timeout = timeval_from_duration(dur)?.into();
+        let timeout = timeval_from_duration(dur)?;
         Ok(SendTimeout.set(&self.socket, &timeout)?)
     }
 
@@ -460,13 +461,13 @@ impl VsockStream {
 
     /// Set the timeout on read operations.
     pub fn set_read_timeout(&self, dur: Option<Duration>) -> Result<()> {
-        let timeout = timeval_from_duration(dur)?.into();
+        let timeout = timeval_from_duration(dur)?;
         Ok(ReceiveTimeout.set(&self.socket, &timeout)?)
     }
 
     /// Set the timeout on write operations.
     pub fn set_write_timeout(&self, dur: Option<Duration>) -> Result<()> {
-        let timeout = timeval_from_duration(dur)?.into();
+        let timeout = timeval_from_duration(dur)?;
         Ok(SendTimeout.set(&self.socket, &timeout)?)
     }
 
