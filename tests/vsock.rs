@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-use rand::RngCore;
+use rand::Rng;
 use sha2::{Digest, Sha256};
 use std::io::{Read, Write};
 use vsock::{get_local_cid, VsockAddr, VsockListener, VsockStream, VMADDR_CID_HOST};
