@@ -237,6 +237,18 @@ impl IntoRawFd for VsockListener {
     }
 }
 
+impl From<VsockListener> for OwnedFd {
+    fn from(value: VsockListener) -> Self {
+        value.socket
+    }
+}
+
+impl From<OwnedFd> for VsockListener {
+    fn from(socket: OwnedFd) -> Self {
+        Self { socket }
+    }
+}
+
 /// A virtio sequential packet socket between a local and a remote host.
 ///
 /// This is the vsock equivalent of [`std::net::UdpSocket`].
@@ -407,6 +419,18 @@ impl IntoRawFd for VsockSocket {
     }
 }
 
+impl From<VsockSocket> for OwnedFd {
+    fn from(value: VsockSocket) -> Self {
+        value.socket
+    }
+}
+
+impl From<OwnedFd> for VsockSocket {
+    fn from(socket: OwnedFd) -> Self {
+        Self { socket }
+    }
+}
+
 /// A virtio stream between a local and a remote socket.
 ///
 /// This is the vsock equivalent of [`std::net::TcpStream`].
@@ -551,6 +575,18 @@ impl FromRawFd for VsockStream {
 impl IntoRawFd for VsockStream {
     fn into_raw_fd(self) -> RawFd {
         self.socket.into_raw_fd()
+    }
+}
+
+impl From<VsockStream> for OwnedFd {
+    fn from(value: VsockStream) -> Self {
+        value.socket
+    }
+}
+
+impl From<OwnedFd> for VsockStream {
+    fn from(socket: OwnedFd) -> Self {
+        Self { socket }
     }
 }
 
