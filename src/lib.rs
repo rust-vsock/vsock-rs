@@ -17,10 +17,7 @@
 
 //! Virtio socket support for Rust.
 
-use libc::{
-    accept, fcntl, ioctl, sa_family_t, sockaddr, sockaddr_vm, socklen_t, timeval, AF_VSOCK,
-    FD_CLOEXEC, FIONBIO, F_SETFD,
-};
+use libc::{ioctl, sa_family_t, sockaddr, sockaddr_vm, socklen_t, timeval, AF_VSOCK, FIONBIO};
 use nix::{
     ioctl_read_bad,
     sys::{
@@ -32,7 +29,6 @@ use nix::{
         },
         time::TimeVal,
     },
-    unistd::close,
 };
 use std::mem::size_of;
 use std::net::Shutdown;
@@ -164,8 +160,20 @@ impl VsockListener {
             svm_len: size_of::<sockaddr_vm>() as u8,
         };
         let mut vsock_addr_len = size_of::<sockaddr_vm>() as socklen_t;
+        // Set close-on-exec atomically to avoid leaking the socket to a
+        // concurrently spawned child process.
+        #[cfg(not(target_os = "macos"))]
         let socket = unsafe {
-            accept(
+            libc::accept4(
+                self.socket.as_raw_fd(),
+                &mut vsock_addr as *mut _ as *mut sockaddr,
+                &mut vsock_addr_len,
+                libc::SOCK_CLOEXEC,
+            )
+        };
+        #[cfg(target_os = "macos")]
+        let socket = unsafe {
+            libc::accept(
                 self.socket.as_raw_fd(),
                 &mut vsock_addr as *mut _ as *mut sockaddr,
                 &mut vsock_addr_len,
@@ -174,15 +182,17 @@ impl VsockListener {
         if socket < 0 {
             return Err(Error::last_os_error());
         }
-        if unsafe { fcntl(socket, F_SETFD, FD_CLOEXEC) } < 0 {
-            close(socket)?;
-            Err(Error::last_os_error())
-        } else {
-            Ok((
-                unsafe { VsockStream::from_raw_fd(socket as RawFd) },
-                VsockAddr::new(vsock_addr.svm_cid, vsock_addr.svm_port),
-            ))
+        // SAFETY: accept returned a new descriptor owned by this function.
+        let socket = unsafe { OwnedFd::from_raw_fd(socket) };
+        // macOS has no accept4, so retain the close-on-exec fallback.
+        #[cfg(target_os = "macos")]
+        if unsafe { libc::fcntl(socket.as_raw_fd(), libc::F_SETFD, libc::FD_CLOEXEC) } < 0 {
+            return Err(Error::last_os_error());
         }
+        Ok((
+            VsockStream::from(socket),
+            VsockAddr::new(vsock_addr.svm_cid, vsock_addr.svm_port),
+        ))
     }
 
     /// An iterator over the connections being received on this listener.
